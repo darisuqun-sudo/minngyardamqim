@@ -1,0 +1,6 @@
+{
+  "name": "Smart Assistant & Architecture Planner",
+  "description": "A multifunctional modern AI assistant, personal productivity hub, and full-scale architectural design planning workspace.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

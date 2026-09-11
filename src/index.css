@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-uyghur: "UKIJ Tuz", "Alpida", "ALKATIP Basma", "Microsoft Uighur", "Segoe UI", "Tahoma", "Arial", sans-serif;
+  }
+
+  body {
+    font-family: var(--font-uyghur);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Improved Arabic & Uyghur typography legibility */
+  [dir="rtl"] {
+    text-align: right;
+    letter-spacing: 0;
+  }
+
+  [dir="ltr"] {
+    text-align: left;
+  }
+}
+
+/* Custom Night Themes */
+html.theme-midnight {
+  background-color: #0b0f19;
+  color-scheme: dark;
+}
+html.theme-midnight body {
+  background-color: #0b0f19;
+  color: #e2e8f0;
+}
+
+html.theme-oled {
+  background-color: #000000;
+  color-scheme: dark;
+}
+html.theme-oled body {
+  background-color: #000000;
+  color: #f8fafc;
+}
+html.theme-oled .bg-slate-900,
+html.theme-oled .bg-slate-950,
+html.theme-oled .bg-white {
+  background-color: #050505 !important;
+  border-color: #262626 !important;
+}
+
+html.theme-sepia {
+  background-color: #f7f1e5;
+  color-scheme: light;
+}
+html.theme-sepia body {
+  background-color: #f7f1e5;
+  color: #382c20;
+}
+html.theme-sepia .bg-white {
+  background-color: #fffcf4 !important;
+  border-color: #e6dac6 !important;
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}

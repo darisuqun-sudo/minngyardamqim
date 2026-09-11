@@ -1,0 +1,20 @@
+{
+  "short_name": "SmartAssistant",
+  "name": "Smart AI Assistant & Productivity Hub",
+  "description": "ئەقلىي ياردەمچى ۋە ئۇنىۋېرسال ئىشلەپچىقىرىش مەركىزى",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0f172a",
+  "theme_color": "#4f46e5",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "lang": "ug",
+  "dir": "rtl"
+}
