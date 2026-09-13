@@ -27,6 +27,7 @@ import {
   FinanceTransaction,
   AppLanguage,
 } from '../types';
+import { speakTextAi, stopSpeakingAi } from '../utils/aiVoiceService';
 
 interface MorningBriefingModalProps {
   isOpen: boolean;
@@ -91,25 +92,29 @@ export const MorningBriefingModal: React.FC<MorningBriefingModalProps> = ({
     }
   };
 
-  const handleReadAloud = () => {
-    if (!('speechSynthesis' in window)) return;
+  useEffect(() => {
+    return () => {
+      stopSpeakingAi();
+    };
+  }, []);
 
+  const handleReadAloud = async () => {
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      stopSpeakingAi();
       setIsSpeaking(false);
       return;
     }
 
     const textToSpeak = `${currentBriefing.greeting}. ${currentBriefing.dailyWisdomQuote}. ${currentBriefing.calendarSummary}`;
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utterance.lang = language === 'ug' ? 'ug' : language === 'tr' ? 'tr-TR' : language === 'ar' ? 'ar-SA' : 'en-US';
-    utterance.rate = 1.0;
-
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
-    setIsSpeaking(true);
+    try {
+      await speakTextAi(textToSpeak, language, {
+        onStart: () => setIsSpeaking(true),
+        onEnd: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    } catch {
+      setIsSpeaking(false);
+    }
   };
 
   const handlePushPriorityToTask = (priorityTitle: string, idx: number) => {

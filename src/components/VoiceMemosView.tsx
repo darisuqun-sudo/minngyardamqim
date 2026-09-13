@@ -25,6 +25,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { VoiceMemo, AppLanguage, TaskItem, NoteItem } from '../types';
+import { transcribeVoiceAudio } from '../utils/aiVoiceService';
 
 interface VoiceMemosViewProps {
   voiceMemos: VoiceMemo[];
@@ -148,9 +149,38 @@ export const VoiceMemosView: React.FC<VoiceMemosViewProps> = ({
       mediaRecorderRef.current.stop();
     }
 
-    const transcriptToProcess = liveTranscript.trim() || manualNoteInput.trim() || (language === 'ug' ? 'تېز ئاۋازلىق كىرگۈزۈش خاتىرىسى' : 'Quick voice note');
-
     setIsProcessing(true);
+
+    let transcriptToProcess = liveTranscript.trim() || manualNoteInput.trim();
+
+    // Fallback: If browser speech recognition failed or was empty, transcribe recorded audio via Gemini
+    if (!transcriptToProcess && audioChunksRef.current.length > 0) {
+      try {
+        const audioBlob = new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type || 'audio/webm' });
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onloadend = () => {
+            const res = reader.result as string;
+            resolve(res.split(',')[1] || '');
+          };
+          reader.readAsDataURL(audioBlob);
+        });
+        const base64 = await base64Promise;
+        if (base64) {
+          const geminiTranscribed = await transcribeVoiceAudio(base64, audioBlob.type || 'audio/webm', language);
+          if (geminiTranscribed && geminiTranscribed.trim()) {
+            transcriptToProcess = geminiTranscribed.trim();
+          }
+        }
+      } catch (e) {
+        console.warn('Fallback audio transcription failed:', e);
+      }
+    }
+
+    if (!transcriptToProcess) {
+      transcriptToProcess = language === 'ug' ? 'تېز ئاۋازلىق كىرگۈزۈش خاتىرىسى' : 'Quick voice note';
+    }
+
     try {
       const res = await fetch('/api/process-voice-memo', {
         method: 'POST',

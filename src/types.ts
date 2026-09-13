@@ -39,6 +39,7 @@ export interface ChatAttachment {
   dataUrl?: string;
   base64Data?: string;
   textContent?: string;
+  driveUrl?: string;
 }
 
 export interface ChatMessage {
@@ -63,13 +64,17 @@ export interface GeminiModelInfo {
   descriptionEn: string;
   descriptionTr?: string;
   descriptionAr?: string;
-  category: 'default' | 'fast' | 'reasoning' | 'pro' | 'lite';
+  category: 'default' | 'fast' | 'reasoning' | 'pro' | 'lite' | 'vision' | 'audio';
   speedLevel: number; // 1 to 5
   intelligenceLevel: number; // 1 to 5
   contextWindow: string;
   iconName: string;
   color: string;
   isRecommended?: boolean;
+  isFreeTier?: boolean;
+  freeTierLimitsUg?: string;
+  freeTierLimitsEn?: string;
+  freeTierRate?: string;
 }
 
 export interface ChatSession {
@@ -160,6 +165,8 @@ export interface NoteItem {
   tags: string[];
   updatedAt: string;
   pinned?: boolean;
+  isChatSync?: boolean;
+  chatSessionId?: string;
 }
 
 export interface QuickTool {

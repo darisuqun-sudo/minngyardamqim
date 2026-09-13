@@ -10,6 +10,15 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "30mb" }));
 
+// Health check right at the beginning
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Lazy initialize Gemini client safely
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -24,6 +33,30 @@ function getGeminiClient(): GoogleGenAI | null {
       },
     },
   });
+}
+
+// Helper to convert raw PCM (16-bit little-endian) to standard WAV with RIFF header
+function pcmToWav(pcmBase64: string, sampleRate = 24000, numChannels = 1): string {
+  const pcmBuffer = Buffer.from(pcmBase64, "base64");
+  const byteRate = sampleRate * numChannels * 2;
+  const blockAlign = numChannels * 2;
+  const header = Buffer.alloc(44);
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcmBuffer.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16); // subchunk1size (16 for PCM)
+  header.writeUInt16LE(1, 20);  // audio format (1 = PCM)
+  header.writeUInt16LE(numChannels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(16, 34); // bits per sample
+  header.write("data", 36);
+  header.writeUInt32LE(pcmBuffer.length, 40);
+
+  return Buffer.concat([header, pcmBuffer]).toString("base64");
 }
 
 // Helper to safely format multi-turn messages for Gemini API with multimodal attachments
@@ -150,10 +183,13 @@ async function generateWithGeminiFallback(
   const candidateModels = [
     preferred,
     "gemini-3.8-flash",
+    "gemini-3.7-flash",
     "gemini-flash-latest",
     "gemini-3.1-flash-lite",
-    "gemini-3.7-flash",
     "gemini-3.1-pro-preview",
+    "gemini-3.1-flash-lite-image",
+    "gemini-3.1-flash-image",
+    "gemini-3.5-transcribe",
   ].filter((m, idx, arr) => arr.indexOf(m) === idx);
 
   let lastError: any = null;
@@ -178,24 +214,18 @@ async function generateWithGeminiFallback(
   throw lastError || new Error("All Gemini model fallback attempts failed.");
 }
 
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // Available Gemini Models list
 app.get("/api/gemini/models", (req, res) => {
   res.json({
     activeModels: [
-      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", category: "default", isRecommended: true },
-      { id: "gemini-flash-latest", name: "Gemini Flash Latest", category: "fast" },
-      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", category: "reasoning" },
-      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro", category: "pro" },
-      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite", category: "lite" },
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", category: "default", isRecommended: true, isFreeTier: true },
+      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash Medium", category: "reasoning", isFreeTier: true },
+      { id: "gemini-flash-latest", name: "Gemini Flash Latest", category: "fast", isFreeTier: true },
+      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite", category: "lite", isFreeTier: true },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", category: "pro", isFreeTier: true },
+      { id: "gemini-3.1-flash-lite-image", name: "Gemini 3.1 Flash Lite Image", category: "vision", isFreeTier: true },
+      { id: "gemini-3.1-flash-image", name: "Gemini 3.1 Flash Image", category: "vision", isFreeTier: true },
+      { id: "gemini-3.5-transcribe", name: "Gemini 3.5 Transcribe", category: "audio", isFreeTier: true },
     ],
     defaultModel: "gemini-3.8-flash",
   });
@@ -952,6 +982,134 @@ Return strictly a JSON object:
   } catch (error: any) {
     console.error("Error in /api/process-voice-memo:", error);
     res.status(500).json({ error: error.message || "Failed to process voice memo" });
+  }
+});
+
+// Resilient Voice Transcription Endpoint (STT: Spoken Audio -> Text)
+// Powers high-accuracy Uyghur, Turkish, Arabic, and English voice dictation
+app.post("/api/transcribe-voice", async (req, res) => {
+  try {
+    const { audioBase64, mimeType, language } = req.body;
+    if (!audioBase64) {
+      return res.status(400).json({ error: "No audio data provided" });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.json({ transcript: "" });
+    }
+
+    const cleanBase64 = audioBase64.replace(/^data:[^;]+;base64,/, "");
+    const cleanMime = (mimeType || "audio/webm").split(";")[0];
+
+    const langName =
+      language === "ug"
+        ? "Uyghur (ئۇيغۇرچە)"
+        : language === "tr"
+        ? "Turkish"
+        : language === "ar"
+        ? "Arabic"
+        : "English";
+
+    const prompt = `You are an elite speech recognition and transcription model.
+Listen carefully to this audio recording and transcribe it into accurate text.
+Language context: ${langName}.
+If spoken in Uyghur, transcribe strictly in proper Uyghur Arabic script (ئۇيغۇرچە تېكىست، مەسىلەن: ئەسسالامۇ ئەلەيكۇم، سۈنئىي ئەقىل).
+If spoken in Turkish, transcribe in Turkish.
+If spoken in Arabic, transcribe in Arabic.
+If spoken in English, transcribe in English.
+Output ONLY the transcribed words with proper punctuation.
+Do not include any commentary, explanations, quotes, or timestamps.
+If the audio is silent or unintelligible, return an empty string.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: [
+        {
+          inlineData: {
+            mimeType: cleanMime,
+            data: cleanBase64,
+          },
+        },
+        prompt,
+      ],
+      config: {
+        temperature: 0.1,
+      },
+    });
+
+    const transcript = (response.text || "").trim();
+    res.json({ transcript });
+  } catch (error: any) {
+    console.error("Error in /api/transcribe-voice:", error);
+    res.status(500).json({ error: error.message || "Failed to transcribe voice" });
+  }
+});
+
+// Resilient Text-To-Speech Endpoint (TTS: Text -> Natural Spoken Audio)
+// Generates natural voice playback for Uyghur and other languages using Gemini TTS
+app.post("/api/text-to-speech", async (req, res) => {
+  try {
+    const { text, language, voice } = req.body;
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "No text provided" });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(503).json({ error: "Gemini client not initialized" });
+    }
+
+    // Clean markdown and symbols for natural narration
+    let cleanText = text
+      .replace(/```[\s\S]*?```/g, "") // remove code blocks
+      .replace(/`([^`]+)`/g, "$1")     // remove code backticks
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // link labels
+      .replace(/[*#_~>•]/g, " ")       // remove markdown punctuation
+      .replace(/https?:\/\/\S+/g, "") // remove URLs
+      .replace(/\s+/g, " ")           // normalize whitespace
+      .trim();
+
+    // Cap text to avoid latency spikes while reading paragraphs comfortably
+    if (cleanText.length > 700) {
+      cleanText = cleanText.slice(0, 700) + " ...";
+    }
+
+    if (!cleanText) {
+      cleanText = text.slice(0, 100);
+    }
+
+    const selectedVoice = voice || "Kore"; // 'Kore' is warm, clear and expressive
+
+    const ttsResponse = await ai.models.generateContent({
+      model: "gemini-3.1-flash-tts-preview",
+      contents: [{ parts: [{ text: cleanText }] }],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: selectedVoice },
+          },
+        },
+      },
+    });
+
+    const rawPcmData = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!rawPcmData) {
+      return res.status(500).json({ error: "No audio data returned by TTS engine" });
+    }
+
+    // Convert raw 24kHz 16-bit mono PCM into standard WAV format
+    const wavBase64 = pcmToWav(rawPcmData, 24000, 1);
+
+    res.json({
+      audioBase64: wavBase64,
+      mimeType: "audio/wav",
+      voice: selectedVoice,
+    });
+  } catch (error: any) {
+    console.error("Error in /api/text-to-speech:", error);
+    res.status(500).json({ error: error.message || "Failed to generate speech" });
   }
 });
 
@@ -1831,24 +1989,37 @@ Return ONLY a valid JSON object:
 
 // Vite middleware in dev or static serving in production
 async function setupViteOrStatic() {
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+  try {
+    if (process.env.NODE_ENV !== "production") {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      app.use(express.static(distPath));
+      app.get("*", (req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Smart Assistant & Blueprint Server running on http://localhost:${PORT}`);
-  });
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+
+    const gracefulShutdown = () => {
+      server.close(() => {
+        process.exit(0);
+      });
+    };
+    process.on("SIGTERM", gracefulShutdown);
+    process.on("SIGINT", gracefulShutdown);
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
 }
 
 setupViteOrStatic();

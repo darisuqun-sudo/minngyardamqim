@@ -310,9 +310,9 @@ export default function App() {
   // Selected Gemini Model (Persisted)
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>(() => {
     try {
-      return localStorage.getItem('gemini_selected_model') || 'gemini-3.8-flash';
+      return localStorage.getItem('gemini_selected_model') || 'gemini-3.7-flash';
     } catch (e) {
-      return 'gemini-3.8-flash';
+      return 'gemini-3.7-flash';
     }
   });
 
@@ -567,6 +567,71 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('app_notes', JSON.stringify(notes));
   }, [notes]);
+
+  // Automatically sync chat conversations to Notebooks / Notes (ھەر قېتىم پاراڭلاشقان پاراڭلارنى يېڭى خاتىرىلەرگە ئاپتوماتىك ساقلاش)
+  useEffect(() => {
+    if (!chatSessions || chatSessions.length === 0) return;
+
+    // Find sessions that have at least 1 user message
+    const sessionsWithChat = chatSessions.filter(
+      (s) => s.messages && s.messages.some((m) => m.role === 'user')
+    );
+
+    if (sessionsWithChat.length === 0) return;
+
+    setNotes((prevNotes) => {
+      let changed = false;
+      const updatedNotes = [...prevNotes];
+
+      for (const session of sessionsWithChat) {
+        const noteId = `nb-chat-${session.id}`;
+        const existingIdx = updatedNotes.findIndex((n) => n.id === noteId);
+
+        // Format conversation transcript clearly
+        const dialogueLines = session.messages
+          .filter((m) => m.content && m.content.trim().length > 0)
+          .map((m) => {
+            const roleBadge = m.role === 'user' ? '👤 سىز' : '🤖 Gemini AI';
+            const timeStr = m.timestamp ? ` (${m.timestamp})` : '';
+            return `${roleBadge}${timeStr}:\n${m.content}`;
+          })
+          .join('\n\n---\n\n');
+
+        const sessionTitle = session.title?.trim() || (lang === 'ug' ? 'سۆھبەت خاتىرىسى' : 'Chat Notes');
+        const formattedContent = `# 💬 ${sessionTitle}\n\n${dialogueLines}`;
+
+        if (existingIdx >= 0) {
+          const current = updatedNotes[existingIdx];
+          if (current.content !== formattedContent || current.title !== sessionTitle) {
+            updatedNotes[existingIdx] = {
+              ...current,
+              title: sessionTitle,
+              content: formattedContent,
+              updatedAt: session.updatedAt || new Date().toISOString(),
+              isChatSync: true,
+              chatSessionId: session.id,
+              tags: ['سۆھبەت', 'Gemini'],
+            };
+            changed = true;
+          }
+        } else {
+          // Prepend at the top of notes so it immediately appears in Notebooks
+          updatedNotes.unshift({
+            id: noteId,
+            title: sessionTitle,
+            content: formattedContent,
+            tags: ['سۆھبەت', 'Gemini'],
+            updatedAt: session.updatedAt || new Date().toISOString(),
+            isChatSync: true,
+            chatSessionId: session.id,
+          });
+          changed = true;
+        }
+      }
+
+      return changed ? updatedNotes : prevNotes;
+    });
+  }, [chatSessions, lang]);
 
   useEffect(() => {
     localStorage.setItem('app_calendar_events', JSON.stringify(events));
@@ -1279,6 +1344,8 @@ export default function App() {
             chatSessions={chatSessions}
             activeSessionId={activeSessionId}
             selectedModelId={selectedGeminiModel}
+            notes={notes}
+            onSaveNote={handleSaveNote}
             onSelectModel={handleSelectGeminiModel}
             onSendMessage={handleSendMessage}
             onClearChat={handleClearChat}

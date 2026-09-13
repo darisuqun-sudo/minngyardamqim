@@ -51,14 +51,29 @@ import {
   AudioLines,
   SlidersHorizontal,
   Settings,
+  Upload,
+  Camera,
+  HardDrive,
+  FolderPlus,
+  Zap,
+  Ban,
+  Loader2,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { AppLanguage, ChatMessage, ChatAttachment, AssistantPersona, ChatSession } from '../types';
+import { AppLanguage, ChatMessage, ChatAttachment, AssistantPersona, ChatSession, NoteItem } from '../types';
 import { LOCALIZED_PERSONAS } from '../data/localizedData';
 import { TRANSLATIONS } from '../data/translations';
 import { LiveCanvasSandbox, CanvasDocument } from './LiveCanvasSandbox';
 import { ModelSelectorModal } from './ModelSelectorModal';
-import { getGeminiModelById, DEFAULT_GEMINI_MODEL_ID } from '../data/geminiModels';
+import { GoogleDriveModal } from './GoogleDriveModal';
+import { getGeminiModelById, DEFAULT_GEMINI_MODEL_ID, GEMINI_MODELS } from '../data/geminiModels';
+import { GeminiSideDrawer } from './GeminiSideDrawer';
+import {
+  speakTextAi,
+  stopSpeakingAi,
+  startVoiceRecorder,
+  transcribeVoiceAudio,
+} from '../utils/aiVoiceService';
 
 interface AssistantChatViewProps {
   lang: AppLanguage;
@@ -77,6 +92,8 @@ interface AssistantChatViewProps {
   onClearAllSessions?: () => void;
   isLoading: boolean;
   onOpenVoiceModal?: () => void;
+  notes?: NoteItem[];
+  onSaveNote?: (note: NoteItem) => void;
 }
 
 export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
@@ -96,6 +113,8 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
   onClearAllSessions,
   isLoading,
   onOpenVoiceModal,
+  notes,
+  onSaveNote,
 }) => {
   const isRTL = lang === 'ug' || lang === 'ar';
   const ArrowIcon = isRTL ? ArrowLeft : ArrowRight;
@@ -115,6 +134,160 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
   const [isModelSelectorOpen, setIsModelSelectorOpen] = useState(false);
   const activeModelId = selectedModelId || DEFAULT_GEMINI_MODEL_ID;
   const currentModelInfo = getGeminiModelById(activeModelId);
+
+  // Attachment Menu (+) & Google Drive State
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Model Selection Popover Menu State & Ref (matching user's photo)
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+
+  // Gemini Side Drawer State (matching user's photo: 3-line menu button -> Gemini menu)
+  const [isGeminiDrawerOpen, setIsGeminiDrawerOpen] = useState(false);
+
+  // Workspace / Project Selector State
+  // The 6 initial dummy items (tor, ئەقلىي ياردەمچى, qutluq-bazaar-server, qutluq-bazaar 8-19, brave-goodall, يېڭى) are removed per user request.
+  const REMOVED_PROJECT_NAMES = new Set([
+    'tor',
+    'ئەقلىي ياردەمچى',
+    'qutluq-bazaar-server',
+    'qutluq-bazaar 8-19',
+    'brave-goodall',
+    'يېڭى',
+    'yengi',
+  ]);
+
+  const [userProjects, setUserProjects] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('gemini_user_projects');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((p) => typeof p === 'string' && !REMOVED_PROJECT_NAMES.has(p));
+          return cleaned;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return [];
+  });
+
+  const [selectedProject, setSelectedProject] = useState<string>(() => {
+    const saved = localStorage.getItem('gemini_selected_project');
+    if (saved && !REMOVED_PROJECT_NAMES.has(saved) && saved !== 'No Project') {
+      return saved;
+    }
+    return 'No Project';
+  });
+
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [isCreatingNewFolder, setIsCreatingNewFolder] = useState(false);
+  const [newFolderNameInput, setNewFolderNameInput] = useState('');
+  const projectMenuRef = useRef<HTMLDivElement>(null);
+  const projectSearchInputRef = useRef<HTMLInputElement>(null);
+  const projectFolderInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSelectProject = (projectName: string) => {
+    setSelectedProject(projectName);
+    localStorage.setItem('gemini_selected_project', projectName);
+    setIsProjectMenuOpen(false);
+    setProjectSearchQuery('');
+    setIsCreatingNewFolder(false);
+  };
+
+  const handleDeleteProject = (projectName: string) => {
+    const updated = userProjects.filter((p) => p !== projectName);
+    setUserProjects(updated);
+    localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
+    if (selectedProject === projectName) {
+      handleSelectProject('No Project');
+    }
+  };
+
+  const handleAddNewFolder = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (!userProjects.includes(trimmed)) {
+      const updated = [trimmed, ...userProjects];
+      setUserProjects(updated);
+      localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
+    }
+    handleSelectProject(trimmed);
+    setNewFolderNameInput('');
+    setIsCreatingNewFolder(false);
+  };
+
+  const handleProjectFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const fileList = Array.from(files);
+    const first = fileList[0];
+    const relPath = (first as any).webkitRelativePath || first.name;
+    const folderOrFileName = relPath.includes('/') ? relPath.split('/')[0] : first.name.replace(/\.[^/.]+$/, '');
+    const finalName = folderOrFileName || first.name;
+
+    if (!userProjects.includes(finalName)) {
+      const updated = [finalName, ...userProjects];
+      setUserProjects(updated);
+      localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
+    }
+    handleSelectProject(finalName);
+
+    // Also attach the chosen file(s) into chat attachment
+    fileList.slice(0, 5).forEach((f) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        setAttachments((prev) => [
+          ...prev,
+          {
+            id: `proj-file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: f.name,
+            type: f.type.startsWith('image/') ? 'image' : 'file',
+            mimeType: f.type || 'application/octet-stream',
+            size: f.size,
+            dataUrl: content,
+          },
+        ]);
+      };
+      reader.readAsDataURL(f);
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        attachMenuRef.current &&
+        !attachMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsAttachMenuOpen(false);
+      }
+      if (
+        modelMenuRef.current &&
+        !modelMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsModelMenuOpen(false);
+      }
+      if (
+        projectMenuRef.current &&
+        !projectMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsProjectMenuOpen(false);
+        setIsCreatingNewFolder(false);
+      }
+    };
+    if (isAttachMenuOpen || isModelMenuOpen || isProjectMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isAttachMenuOpen, isModelMenuOpen, isProjectMenuOpen]);
 
   // Chat History & Session Management State
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -138,6 +311,10 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
   const timerRef = useRef<any>(null);
+
+  const [isTranscribingVoice, setIsTranscribingVoice] = useState(false);
+  const voiceRecorderRef = useRef<{ stop: () => Promise<{ blob: Blob; base64: string; mimeType: string }> } | null>(null);
+  const activeTtsStopRef = useRef<(() => void) | null>(null);
 
   const activePersona =
     LOCALIZED_PERSONAS.find((p) => p.id === selectedPersonaId) || LOCALIZED_PERSONAS[0];
@@ -464,74 +641,70 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
     }
   }, [messages, isLoading, autoTTS]);
 
-  // Speech Recognition Setup
+  // Cleanup audio playback and recorder on unmount
   useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const rec = new SpeechRecognition();
-      rec.continuous = true;
-      rec.interimResults = true;
-      if (lang === 'ug') rec.lang = 'ug-CN';
-      else if (lang === 'tr') rec.lang = 'tr-TR';
-      else if (lang === 'ar') rec.lang = 'ar-SA';
-      else rec.lang = 'en-US';
-
-      rec.onresult = (event: any) => {
-        let currentText = '';
-        for (let i = 0; i < event.results.length; ++i) {
-          currentText += event.results[i][0].transcript;
-        }
-        setInput((prev) => {
-          // If we had text before starting recording, append; otherwise replace with live transcript
-          return currentText;
-        });
-      };
-
-      rec.onerror = () => stopRecordingSession();
-      rec.onend = () => {
-        if (isRecording) {
-          stopRecordingSession();
-        }
-      };
-      recognitionRef.current = rec;
-    }
-
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (activeTtsStopRef.current) activeTtsStopRef.current();
+      stopSpeakingAi();
+      if (voiceRecorderRef.current) {
+        try {
+          voiceRecorderRef.current.stop();
+        } catch {}
+      }
     };
-  }, [lang]);
+  }, []);
 
-  const startRecordingSession = () => {
-    if (!recognitionRef.current) {
-      if (onOpenVoiceModal) onOpenVoiceModal();
-      return;
-    }
+  const startRecordingSession = async () => {
     try {
-      recognitionRef.current.start();
+      if (activeTtsStopRef.current) {
+        activeTtsStopRef.current();
+        activeTtsStopRef.current = null;
+      }
+      stopSpeakingAi();
+
+      const recorder = await startVoiceRecorder();
+      voiceRecorderRef.current = recorder;
       setIsRecording(true);
       setRecordingSeconds(0);
+
+      if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = setInterval(() => {
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
     } catch (e) {
-      console.warn('Speech recognition start failed:', e);
+      console.warn('Microphone recording start failed:', e);
       setIsRecording(false);
+      // Fallback: open voice assistant modal
+      if (onOpenVoiceModal) onOpenVoiceModal();
     }
   };
 
-  const stopRecordingSession = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-    }
+  const stopRecordingSession = async () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
     setIsRecording(false);
-    setRecordingSeconds(0);
+
+    if (voiceRecorderRef.current) {
+      try {
+        setIsTranscribingVoice(true);
+        const { base64, mimeType } = await voiceRecorderRef.current.stop();
+        voiceRecorderRef.current = null;
+
+        // Multimodal Gemini speech recognition with specialized Uyghur support
+        const transcribedText = await transcribeVoiceAudio(base64, mimeType, lang);
+        if (transcribedText) {
+          setInput((prev) => (prev.trim() ? `${prev.trim()} ${transcribedText}` : transcribedText));
+        }
+      } catch (err) {
+        console.error('Voice transcription error:', err);
+      } finally {
+        setIsTranscribingVoice(false);
+        setRecordingSeconds(0);
+      }
+    }
   };
 
   const toggleRecording = () => {
@@ -542,27 +715,35 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
     }
   };
 
-  // Text-To-Speech
-  const handleSpeakMessage = (text: string, idx: number) => {
-    if (!('speechSynthesis' in window)) return;
+  // Text-To-Speech with natural Gemini AI voice and Uyghur pronunciation
+  const handleSpeakMessage = async (text: string, idx: number) => {
     if (speakingMsgIdx === idx) {
-      window.speechSynthesis.cancel();
+      if (activeTtsStopRef.current) {
+        activeTtsStopRef.current();
+        activeTtsStopRef.current = null;
+      }
+      stopSpeakingAi();
       setSpeakingMsgIdx(null);
       return;
     }
 
-    window.speechSynthesis.cancel();
-    const cleanText = text.replace(/[*#`_\[\]()]/g, '');
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    if (lang === 'tr') utterance.lang = 'tr-TR';
-    else if (lang === 'ar') utterance.lang = 'ar-SA';
-    else if (lang === 'en') utterance.lang = 'en-US';
-    else utterance.lang = 'ug';
+    if (activeTtsStopRef.current) {
+      activeTtsStopRef.current();
+      activeTtsStopRef.current = null;
+    }
+    stopSpeakingAi();
 
-    utterance.onstart = () => setSpeakingMsgIdx(idx);
-    utterance.onend = () => setSpeakingMsgIdx(null);
-    utterance.onerror = () => setSpeakingMsgIdx(null);
-    window.speechSynthesis.speak(utterance);
+    try {
+      const stopFn = await speakTextAi(text, lang, {
+        onStart: () => setSpeakingMsgIdx(idx),
+        onEnd: () => setSpeakingMsgIdx(null),
+        onError: () => setSpeakingMsgIdx(null),
+      });
+      activeTtsStopRef.current = stopFn;
+    } catch (err) {
+      console.error('Speech error:', err);
+      setSpeakingMsgIdx(null);
+    }
   };
 
   // File Upload Handlers
@@ -765,6 +946,9 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
   };
 
   const getFileIcon = (att: ChatAttachment) => {
+    if (att.mimeType === 'application/google-drive' || att.driveUrl) {
+      return <HardDrive className="w-4 h-4 text-emerald-500" />;
+    }
     if (att.type === 'image') return <ImageIcon className="w-4 h-4 text-emerald-500" />;
     if (att.name.endsWith('.pdf')) return <FileText className="w-4 h-4 text-rose-500" />;
     if (
@@ -808,253 +992,19 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
           e.target.value = '';
         }}
       />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files) handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
 
-      {/* Top Session & Multi-Chat Management Bar */}
-      <div className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          {/* Left: Chat Menu Trigger (3 Horizontal Lines), History Toggle & New Chat Button */}
-          <div className="flex items-center flex-wrap gap-2">
-            {/* 3 Horizontal Lines (Hamburger Menu Button) */}
-            <button
-              id="open-chatgpt-menu-btn"
-              onClick={() => setIsHistoryOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95 shrink-0"
-              title={lang === 'ug' ? 'سۆھبەتلەر تىزىملىكى (3 يانتۇ سىزىق)' : 'Chat Menu'}
-            >
-              <Menu className="w-4 h-4" />
-              <span>{lang === 'ug' ? 'تىزىملىك' : 'Menu'}</span>
-              {chatSessions.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-indigo-500 text-white">
-                  {chatSessions.length}
-                </span>
-              )}
-            </button>
 
-            {/* Open Chat History Drawer Button */}
-            <button
-              id="open-chat-history-btn"
-              onClick={() => setIsHistoryOpen(true)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                isHistoryOpen
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80'
-              }`}
-              title={lang === 'ug' ? 'پاراڭ خاتىرىلىرىنى كۆرۈش ۋە باشقۇرۇش' : 'View & manage chat history'}
-            >
-              <History className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-              <span>
-                {lang === 'ug'
-                  ? 'پاراڭلار تارىخى'
-                  : lang === 'tr'
-                  ? 'Sohbet Geçmişi'
-                  : lang === 'ar'
-                  ? 'سجل المحادثات'
-                  : 'Chat History'}
-              </span>
-            </button>
-
-            {/* New Chat Button */}
-            {onCreateNewSession && (
-              <button
-                id="new-chat-session-btn"
-                onClick={() => {
-                  onCreateNewSession();
-                  setIsHistoryOpen(false);
-                }}
-                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/70 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-                title={lang === 'ug' ? 'يېڭى سۆھبەت باشلاش' : 'Start a new conversation'}
-              >
-                <Plus className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span>
-                  {lang === 'ug'
-                    ? 'يېڭى پاراڭ'
-                    : lang === 'tr'
-                    ? 'Yeni Sohbet'
-                    : lang === 'ar'
-                    ? 'محادثة جديدة'
-                    : 'New Chat'}
-                </span>
-              </button>
-            )}
-
-            {/* Current Active Chat Title with Inline Edit */}
-            {currentSession && (
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-700 dark:text-slate-300 max-w-[200px] md:max-w-xs truncate">
-                <MessageSquare className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="truncate font-medium" title={currentSession.title}>
-                  {currentSession.title}
-                </span>
-                <button
-                  onClick={(e) => handleStartRename(currentSession, e)}
-                  className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5 rounded cursor-pointer"
-                  title={lang === 'ug' ? 'تېمىنى ئۆزگەرتىش' : 'Rename title'}
-                >
-                  <Edit3 className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Center/Right: Gemini Model Selector Pill */}
-          <div className="flex items-center flex-wrap gap-1.5">
-            <button
-              id="open-gemini-model-selector-btn"
-              onClick={() => setIsModelSelectorOpen(true)}
-              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200/90 dark:border-indigo-800/90 flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95 shrink-0"
-              title={lang === 'ug' ? 'Gemini مودېلىنى تاللاش' : 'Select Gemini Model'}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span>{currentModelInfo.name}</span>
-              <span className="hidden md:inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-200/60 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200">
-                {lang === 'ug' ? currentModelInfo.badgeUg : currentModelInfo.badgeEn}
-              </span>
-              <ChevronDown className="w-3 h-3 text-indigo-400" />
-            </button>
-
-            {/* Live Split Canvas Workspace Toggle */}
-            <button
-              onClick={() => setIsCanvasOpen(!isCanvasOpen)}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                isCanvasOpen
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300'
-              }`}
-              title={lang === 'ug' ? 'خىزمەت بوشلۇقى تاختىسى' : 'Split Workspace Canvas'}
-            >
-              <Columns className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">
-                {lang === 'ug'
-                  ? 'خىزمەت تاختىسى'
-                  : lang === 'tr'
-                  ? 'Çalışma Tuvali'
-                  : lang === 'ar'
-                  ? 'لوحة العمل'
-                  : 'Split Canvas'}
-              </span>
-            </button>
-
-            {onOpenVoiceModal && (
-              <button
-                onClick={onOpenVoiceModal}
-                className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                title={lang === 'ug' ? 'ئاۋازلىق پاراڭلىشىش ھالىتى' : 'Live Voice Mode'}
-              >
-                <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
-                <span className="hidden md:inline">
-                  {lang === 'ug' ? 'ئاۋازلىق پاراڭ' : lang === 'tr' ? 'Sesli Sohbet' : lang === 'ar' ? 'محادثة صوتية' : 'Voice Mode'}
-                </span>
-              </button>
-            )}
-
-            {/* Auto-TTS Mode Toggle */}
-            <button
-              onClick={() => {
-                const next = !autoTTS;
-                setAutoTTS(next);
-                localStorage.setItem('assistant_auto_tts', String(next));
-                if (!next && 'speechSynthesis' in window) {
-                  window.speechSynthesis.cancel();
-                  setSpeakingMsgIdx(null);
-                }
-              }}
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
-                autoTTS
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 ring-1 ring-emerald-500/40'
-                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
-              }`}
-              title={
-                lang === 'ug'
-                  ? 'ئاپتوماتىك ئاۋاز چىقىرىپ ئوقۇش (Auto-Speech)'
-                  : 'Auto Speech Response'
-              }
-            >
-              {autoTTS ? (
-                <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
-              ) : (
-                <VolumeX className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden md:inline">
-                {autoTTS
-                  ? lang === 'ug'
-                    ? 'ئاپتوماتىك ئاۋاز'
-                    : 'Auto-Voice'
-                  : lang === 'ug'
-                  ? 'ئاۋازسىز'
-                  : 'Voice Off'}
-              </span>
-            </button>
-
-            <button
-              onClick={handleExportChat}
-              disabled={messages.length === 0}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 disabled:opacity-40 transition-colors cursor-pointer"
-              title={t.exportChat}
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline text-xs">{t.exportChat}</span>
-            </button>
-
-            <button
-              onClick={onClearChat}
-              disabled={messages.length === 0}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1 disabled:opacity-40 transition-colors cursor-pointer"
-              title={t.clearChat}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span className="hidden lg:inline text-xs">{t.clearChat}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Horizontal 1-Click Saved Sessions Shelf (Direct Access) */}
-        {chatSessions.length > 0 && (
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
-            <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 shrink-0 flex items-center gap-1 pl-1">
-              <History className="w-3 h-3 text-indigo-500" />
-              <span>{lang === 'ug' ? 'ئالدىنقى سۆھبەتلەر:' : 'Past Chats:'}</span>
-            </span>
-            <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
-              {chatSessions.slice(0, 8).map((session) => {
-                const isActive = session.id === activeSessionId;
-                return (
-                  <button
-                    key={session.id}
-                    onClick={() => {
-                      if (onSelectSession) onSelectSession(session.id);
-                    }}
-                    className={`px-2.5 py-1 rounded-xl text-xs font-medium flex items-center gap-1.5 whitespace-nowrap transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-500'
-                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60'
-                    }`}
-                    title={session.title}
-                  >
-                    {session.pinned ? (
-                      <Pin className="w-3 h-3 text-amber-500 rotate-45 shrink-0" />
-                    ) : (
-                      <MessageSquare className="w-3 h-3 text-slate-400 shrink-0" />
-                    )}
-                    <span className="max-w-[130px] sm:max-w-[180px] truncate">{session.title}</span>
-                    <span className={`text-[10px] px-1 py-0.2 rounded-md ${
-                      isActive ? 'bg-indigo-700 text-indigo-100' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                    }`}>
-                      {session.messages.length}
-                    </span>
-                  </button>
-                );
-              })}
-              {chatSessions.length > 8 && (
-                <button
-                  onClick={() => setIsHistoryOpen(true)}
-                  className="px-2 py-1 rounded-xl text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
-                >
-                  +{chatSessions.length - 8} {lang === 'ug' ? 'تېخىمۇ كۆپ...' : 'more...'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Personas Carousel / Selector Bar */}
       <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
@@ -1128,12 +1078,208 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
               handleFiles(e.dataTransfer.files);
             }
           }}
-          className={`relative rounded-3xl bg-white dark:bg-slate-900 border transition-all shadow-sm flex flex-col h-[620px] overflow-hidden ${
+          className={`relative rounded-3xl bg-white dark:bg-slate-900 border transition-all shadow-sm flex flex-col h-[620px] ${
             isDraggingOver
               ? 'border-indigo-500 ring-2 ring-indigo-500/30'
               : 'border-slate-200 dark:border-slate-800'
           }`}
         >
+        {/* Chat Window Top Bar: Gemini Drawer, Active Session, Model Selector & Action Controls */}
+        <div className="px-3 sm:px-4 py-2 sm:py-2.5 border-b border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-2 shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs rounded-t-3xl select-none z-20">
+          {/* Leading Side: Gemini ☰ Drawer & Current Chat Title */}
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              id="gemini-hamburger-menu-btn"
+              type="button"
+              onClick={() => setIsGeminiDrawerOpen((prev) => !prev)}
+              className="p-1.5 sm:p-2 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-2 group shadow-2xs border border-slate-200/70 dark:border-slate-800 shrink-0"
+              title={lang === 'ug' ? 'Gemini مېنۇسى (ئۈچ سىزىق)' : 'Gemini Menu'}
+            >
+              <Menu className="w-5 h-5 text-slate-700 dark:text-slate-200 group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-bold tracking-wide text-slate-800 dark:text-slate-100 font-sans">
+                Gemini
+              </span>
+            </button>
+
+            {/* Current Active Chat Title with Inline Edit */}
+            {currentSession && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-700 dark:text-slate-300 max-w-[130px] sm:max-w-[200px] md:max-w-xs truncate">
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" />
+                <span className="truncate font-medium" title={currentSession.title}>
+                  {currentSession.title}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartRename(currentSession, e)}
+                  className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5 rounded cursor-pointer shrink-0"
+                  title={lang === 'ug' ? 'تېمىنى ئۆزگەرتىش' : 'Rename title'}
+                >
+                  <Edit3 className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Trailing Side: Middle Section (Model Selector, Canvas, Voice, Mute, Export, Clear, Shortcuts) */}
+          <div className="flex items-center flex-wrap gap-1.5">
+            {/* Gemini Model Selector Pill */}
+            <button
+              id="open-gemini-model-selector-btn"
+              type="button"
+              onClick={() => setIsModelSelectorOpen(true)}
+              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200/90 dark:border-indigo-800/90 flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
+              title={lang === 'ug' ? 'Gemini مودېلىنى تاللاش' : 'Select Gemini Model'}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>{currentModelInfo.name}</span>
+              <span className="hidden lg:inline-block px-1.5 py-0.2 rounded text-[10px] font-bold bg-indigo-200/60 dark:bg-indigo-900/80 text-indigo-800 dark:text-indigo-200">
+                {lang === 'ug' ? currentModelInfo.badgeUg : currentModelInfo.badgeEn}
+              </span>
+              <ChevronDown className="w-3 h-3 text-indigo-400" />
+            </button>
+
+            {/* Live Split Canvas Workspace Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsCanvasOpen(!isCanvasOpen)}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                isCanvasOpen
+                  ? 'bg-indigo-600 text-white border-indigo-500 shadow-2xs'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200/60 dark:border-slate-700/60'
+              }`}
+              title={lang === 'ug' ? 'خىزمەت بوشلۇقى تاختىسى' : 'Split Workspace Canvas'}
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">
+                {lang === 'ug'
+                  ? 'خىزمەت تاختىسى'
+                  : lang === 'tr'
+                  ? 'Çalışma Tuvali'
+                  : lang === 'ar'
+                  ? 'لوحة العمل'
+                  : 'Split Canvas'}
+              </span>
+            </button>
+
+            {/* Voice Mode */}
+            {onOpenVoiceModal && (
+              <button
+                type="button"
+                onClick={onOpenVoiceModal}
+                className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer border border-indigo-100 dark:border-indigo-900/50"
+                title={lang === 'ug' ? 'ئاۋازلىق پاراڭلىشىش ھالىتى' : 'Live Voice Mode'}
+              >
+                <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                <span className="hidden md:inline">
+                  {lang === 'ug' ? 'ئاۋازلىق پاراڭ' : lang === 'tr' ? 'Sesli Sohbet' : lang === 'ar' ? 'محادثة صوتية' : 'Voice Mode'}
+                </span>
+              </button>
+            )}
+
+            {/* Auto-TTS Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoTTS;
+                setAutoTTS(next);
+                localStorage.setItem('assistant_auto_tts', String(next));
+                if (!next) {
+                  stopSpeakingAi();
+                  setSpeakingMsgIdx(null);
+                }
+              }}
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                autoTTS
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800'
+                  : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200/60 dark:border-slate-700/60'
+              }`}
+              title={
+                lang === 'ug'
+                  ? 'ئاپتوماتىك ئاۋاز چىقىرىپ ئوقۇش (Auto-Speech)'
+                  : 'Auto Speech Response'
+              }
+            >
+              {autoTTS ? (
+                <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+              ) : (
+                <VolumeX className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden md:inline">
+                {autoTTS
+                  ? lang === 'ug'
+                    ? 'ئاپتوماتىك ئاۋاز'
+                    : 'Auto-Voice'
+                  : lang === 'ug'
+                  ? 'ئاۋازسىز'
+                  : 'Voice Off'}
+              </span>
+            </button>
+
+            {/* Export Chat */}
+            <button
+              type="button"
+              onClick={handleExportChat}
+              disabled={messages.length === 0}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 disabled:opacity-40 transition-colors cursor-pointer"
+              title={t.exportChat}
+            >
+              <Download className="w-4 h-4" />
+            </button>
+
+            {/* Clear Chat */}
+            <button
+              type="button"
+              onClick={onClearChat}
+              disabled={messages.length === 0}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-1 disabled:opacity-40 transition-colors cursor-pointer"
+              title={t.clearChat}
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+
+            {/* Divider */}
+            <div className="h-4 w-px bg-slate-200 dark:border-slate-800 mx-0.5" />
+
+            {/* Quick New Chat Button */}
+            <button
+              id="header-new-chat-btn"
+              type="button"
+              onClick={() => {
+                if (onCreateNewSession) {
+                  onCreateNewSession();
+                }
+                setInput('');
+              }}
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title={lang === 'ug' ? 'يېڭى سۆھبەت' : 'New Chat'}
+            >
+              <SquarePen className="w-4 h-4" />
+            </button>
+
+            {/* Quick Search Button */}
+            <button
+              id="header-search-chat-btn"
+              type="button"
+              onClick={() => setIsGeminiDrawerOpen(true)}
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title={lang === 'ug' ? 'سۆھبەتلەرنى ئىزدەش' : 'Search Chats'}
+            >
+              <Search className="w-4 h-4" />
+            </button>
+
+            {/* History Drawer Button */}
+            <button
+              id="header-history-drawer-btn"
+              type="button"
+              onClick={() => setIsHistoryOpen(true)}
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title={lang === 'ug' ? 'سۆھبەت تارىخى' : 'History'}
+            >
+              <Clock className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
         {/* Drag & Drop Visual Overlay */}
         {isDraggingOver && (
           <div className="absolute inset-0 z-30 bg-indigo-600/10 dark:bg-indigo-900/30 backdrop-blur-xs flex flex-col items-center justify-center border-2 border-dashed border-indigo-500 rounded-3xl pointer-events-none p-6 text-center">
@@ -1304,7 +1450,14 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                           return (
                             <div
                               key={att.id}
-                              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs ${
+                              onClick={() => {
+                                if (att.driveUrl) {
+                                  window.open(att.driveUrl, '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-all ${
+                                att.driveUrl ? 'cursor-pointer hover:scale-[1.02]' : ''
+                              } ${
                                 isUser
                                   ? 'bg-indigo-700/80 text-white border border-indigo-400/40'
                                   : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300'
@@ -1314,9 +1467,15 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                               <span className="font-medium truncate max-w-[140px]">
                                 {att.name}
                               </span>
-                              <span className="text-[10px] opacity-70">
-                                {formatFileSize(att.size)}
-                              </span>
+                              {att.driveUrl ? (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
+                                  Drive
+                                </span>
+                              ) : (
+                                <span className="text-[10px] opacity-70">
+                                  {formatFileSize(att.size)}
+                                </span>
+                              )}
                             </div>
                           );
                         })}
@@ -1428,40 +1587,57 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                         )}
                       </div>
                       {!isUser && (
-                        <div className="flex items-center gap-2">
-                          {/* Read Aloud Button */}
+                        <div className="flex items-center gap-1">
+                          {/* Read Aloud Button (Icon-Only) */}
                           <button
                             type="button"
                             onClick={() => handleSpeakMessage(msg.content, idx)}
-                            className="p-1 rounded-lg hover:bg-slate-200/70 dark:hover:bg-slate-700 flex items-center gap-1 cursor-pointer transition-colors"
-                            title={speakingMsgIdx === idx ? t.stopSpeaking : t.speakResponse}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${
+                              speakingMsgIdx === idx
+                                ? 'bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-400 ring-1 ring-red-400'
+                                : 'hover:bg-slate-200/70 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400'
+                            }`}
+                            title={
+                              speakingMsgIdx === idx
+                                ? lang === 'ug'
+                                  ? 'ئاۋازنى توختىتىش'
+                                  : t.stopSpeaking
+                                : lang === 'ug'
+                                ? 'ئاۋاز چىقىرىپ ئوقۇش'
+                                : t.speakResponse
+                            }
+                            aria-label={
+                              speakingMsgIdx === idx
+                                ? lang === 'ug'
+                                  ? 'ئاۋازنى توختىتىش'
+                                  : 'Stop speaking'
+                                : lang === 'ug'
+                                ? 'ئاۋاز چىقىرىپ ئوقۇش'
+                                : 'Read message aloud'
+                            }
                           >
                             {speakingMsgIdx === idx ? (
-                              <>
-                                <VolumeX className="w-3.5 h-3.5 text-red-500 animate-pulse" />
-                                <span className="text-red-500 font-medium">
-                                  {lang === 'ug' ? 'توختىتىش' : 'Stop'}
-                                </span>
-                              </>
+                              <VolumeX className="w-3.5 h-3.5 text-red-500 animate-pulse" />
                             ) : (
-                              <>
-                                <Volume2 className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
-                                <span>{lang === 'ug' ? 'ئوقۇش' : 'Read'}</span>
-                              </>
+                              <Volume2 className="w-3.5 h-3.5" />
                             )}
                           </button>
 
-                          {/* Copy Button */}
+                          {/* Copy Button (Icon-Only) */}
                           <button
                             type="button"
                             onClick={() => handleCopy(msg.content, idx)}
-                            className={`p-1 px-1.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors ${
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center ${
                               copiedIndex === idx
-                                ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 font-semibold'
-                                : 'hover:bg-slate-200/70 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                                ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-400'
+                                : 'hover:bg-slate-200/70 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400'
                             }`}
                             title={
-                              lang === 'ug'
+                              copiedIndex === idx
+                                ? lang === 'ug'
+                                  ? 'كۆچۈرۈلدى'
+                                  : t.saved
+                                : lang === 'ug'
                                 ? 'تېكىستنى نۇسخىلاش'
                                 : lang === 'tr'
                                 ? 'Metni Kopyala'
@@ -1469,25 +1645,20 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                                 ? 'نسخ النص'
                                 : 'Copy Text'
                             }
+                            aria-label={
+                              copiedIndex === idx
+                                ? lang === 'ug'
+                                  ? 'كۆچۈرۈلدى'
+                                  : 'Copied'
+                                : lang === 'ug'
+                                ? 'تېكىستنى نۇسخىلاش'
+                                : 'Copy text'
+                            }
                           >
                             {copiedIndex === idx ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                                <span>{lang === 'ug' ? 'كۆچۈرۈلدى' : t.saved}</span>
-                              </>
+                              <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                             ) : (
-                              <>
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>
-                                  {lang === 'ug'
-                                    ? 'نۇسخىلاش'
-                                    : lang === 'tr'
-                                    ? 'Kopyala'
-                                    : lang === 'ar'
-                                    ? 'نسخ'
-                                    : 'Copy'}
-                                </span>
-                              </>
+                              <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
                         </div>
@@ -1648,84 +1819,548 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
           </div>
         )}
 
-        {/* Bottom Input Area with Auto-expanding Vertical Textarea */}
-        <form
-          onSubmit={handleSubmit}
-          className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-end gap-2"
-        >
-          {/* File Attachment & Image Buttons */}
-          <div className="flex items-center gap-1 flex-shrink-0 pb-1">
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-slate-600 dark:text-slate-300 hover:text-indigo-600 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-              title={lang === 'ug' ? 'رەسىم قوشۇش' : 'Attach Image'}
-            >
-              <ImageIcon className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950 text-slate-600 dark:text-slate-300 hover:text-indigo-600 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-              title={lang === 'ug' ? 'ھۆججەت ياكى كود قوشۇش' : 'Attach File / Code'}
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
-
-            {/* Voice Dictation Button */}
-            <button
-              type="button"
-              onClick={toggleRecording}
-              className={`p-2.5 rounded-xl transition-all cursor-pointer ${
-                isRecording
-                  ? 'bg-rose-600 text-white animate-pulse shadow-md shadow-rose-600/30 ring-2 ring-rose-400'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 border border-slate-200 dark:border-slate-700'
-              }`}
-              title={isRecording ? t.voiceInputStop : t.voiceInputStart}
-            >
-              {isRecording ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {/* Auto-expanding Textarea (Strictly vertical expansion, no horizontal growth) */}
-          <div className="flex-1 min-w-0 relative">
-            <textarea
-              ref={textareaRef}
-              rows={1}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                adjustTextareaHeight();
-              }}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                isRecording
-                  ? t.voiceInputListening
-                  : lang === 'ug'
-                  ? 'سوئالىڭىزنى يېزىڭ ياكى ئاۋاز بىلەن سۆزلەڭ (Enter: يوللاش, Shift+Enter: يېڭى قۇر)...'
-                  : lang === 'tr'
-                  ? 'Sorunuzu yazın veya sesli konuşun (Enter: Gönder, Shift+Enter: Yeni satır)...'
-                  : lang === 'ar'
-                  ? 'اكتب سؤالك أو تحدث صوتياً (Enter للإرسال، Shift+Enter لسطر جديد)...'
-                  : 'Type your message or use voice (Enter to send, Shift+Enter for new line)...'
+        {/* Live Audio Transcribing Indicator */}
+        {isTranscribingVoice && (
+          <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-950/40 border-t border-indigo-200 dark:border-indigo-900/50 flex items-center gap-2 text-xs text-indigo-700 dark:text-indigo-300 animate-pulse">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
+            <span className="font-medium">
+              {lang === 'ug'
+                ? 'سۈنئىي ئەقىل ئاۋازىڭىزنى ئۇيغۇرچە تېكىستكە ئايلاندۇرۇۋاتىدۇ...'
+                : 'Transcribing speech with Gemini...'
               }
-              className="w-full max-w-full resize-none p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 whitespace-pre-wrap break-words break-all overflow-y-auto overflow-x-hidden leading-relaxed block transition-all"
-              style={{ minHeight: '44px', maxHeight: '220px' }}
-            />
+            </span>
           </div>
+        )}
 
-          {/* Send Button */}
-          <div className="flex-shrink-0 pb-1">
-            <button
-              type="submit"
-              disabled={(!input.trim() && attachments.length === 0) || isLoading}
-              className="p-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-500/25 disabled:opacity-40 transition-all cursor-pointer flex items-center justify-center"
-              title={t.sendBtn}
-            >
-              <Send className="w-4 h-4" />
-            </button>
-          </div>
-        </form>
+        {/* Bottom Input Area Styled Exactly Matching User Photo */}
+        <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 focus-within:border-slate-400 dark:focus-within:border-slate-600 transition-all p-3 shadow-xs space-y-2.5"
+          >
+            {/* Top Workspace / Session Context Pill (Matching User Photo: [ 📁 tor v ] with Select Project dropdown) */}
+            <div className="flex items-center justify-between px-0.5">
+              <div className="relative" ref={projectMenuRef}>
+                <button
+                  id="chat-select-project-btn"
+                  type="button"
+                  onClick={() => {
+                    setIsProjectMenuOpen(!isProjectMenuOpen);
+                    setTimeout(() => projectSearchInputRef.current?.focus(), 50);
+                  }}
+                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
+                  title="Select Project"
+                >
+                  <Folder className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
+                  <span className="font-medium max-w-[150px] truncate">
+                    {selectedProject && selectedProject !== 'No Project'
+                      ? selectedProject
+                      : lang === 'ug'
+                      ? 'تۈر تاللاش'
+                      : 'Select Project'}
+                  </span>
+                  <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isProjectMenuOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+                </button>
+
+                {/* Dropdown Popover matching photo_2026-09-12_10-59-50 (2).jpg */}
+                {isProjectMenuOpen && (
+                  <div
+                    id="chat-select-project-popover"
+                    className={`absolute top-full mt-1 ${isRTL ? 'right-0' : 'left-0'} z-50 w-64 sm:w-72 max-w-[calc(100vw-2rem)] p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-md space-y-1 animate-in fade-in zoom-in-95 duration-150`}
+                    style={{ direction: isRTL ? 'rtl' : 'ltr' }}
+                  >
+                    {/* Top Label: Select Project Ctrl+: */}
+                    <div className="px-2 py-1 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500 font-medium select-none">
+                      <span>{lang === 'ug' ? 'تۈر تاللاش' : 'Select Project'}</span>
+                      <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 px-1 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                        Ctrl+:
+                      </span>
+                    </div>
+
+                    {/* Search Input Box */}
+                    <div className="p-0.5">
+                      <div className="relative flex items-center">
+                        <Search className={`w-3.5 h-3.5 absolute ${isRTL ? 'right-2.5' : 'left-2.5'} text-slate-400 pointer-events-none`} />
+                        <input
+                          ref={projectSearchInputRef}
+                          type="text"
+                          value={projectSearchQuery}
+                          onChange={(e) => setProjectSearchQuery(e.target.value)}
+                          placeholder={lang === 'ug' ? 'ئىزدەش...' : 'Search...'}
+                          className={`w-full ${isRTL ? 'pr-8 pl-7 text-right' : 'pl-8 pr-7 text-left'} py-1.5 text-xs rounded-lg bg-slate-100/90 dark:bg-slate-800/90 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-300 dark:focus:ring-slate-600 border border-transparent`}
+                        />
+                        {projectSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setProjectSearchQuery('')}
+                            className={`absolute ${isRTL ? 'left-2' : 'right-2'} text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Filtered Project & Folder Items List (6 dummy projects removed) */}
+                    {userProjects.length > 0 && (
+                      <div className="max-h-52 overflow-y-auto space-y-0.5 py-0.5 border-b border-slate-100 dark:border-slate-800/80">
+                        {userProjects
+                          .filter((p) =>
+                            p.toLowerCase().includes(projectSearchQuery.toLowerCase())
+                          )
+                          .map((proj) => {
+                            const isSelected = selectedProject === proj;
+                            return (
+                              <div
+                                key={proj}
+                                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-slate-100 dark:bg-slate-800 font-semibold text-slate-900 dark:text-white'
+                                    : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                                }`}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectProject(proj)}
+                                  className="flex items-center gap-2 min-w-0 flex-1 text-inherit"
+                                >
+                                  <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="truncate">{proj}</span>
+                                </button>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {isSelected && (
+                                    <Check className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300 shrink-0" />
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteProject(proj);
+                                    }}
+                                    className="p-0.5 rounded text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition-colors cursor-pointer"
+                                    title={lang === 'ug' ? 'ئۆچۈرۈش' : 'Delete'}
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+
+                    {/* Bottom Actions List Matching Screenshot (Retained items below 'يېڭى') */}
+                    <div className="pt-0.5 space-y-0.5">
+                      {/* New folder */}
+                      {isCreatingNewFolder ? (
+                        <div className="p-1.5 bg-slate-50 dark:bg-slate-800/50 rounded-lg space-y-1.5">
+                          <input
+                            type="text"
+                            value={newFolderNameInput}
+                            onChange={(e) => setNewFolderNameInput(e.target.value)}
+                            placeholder={lang === 'ug' ? 'قىسقۇچ نامى...' : 'Folder name...'}
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddNewFolder(newFolderNameInput);
+                              } else if (e.key === 'Escape') {
+                                setIsCreatingNewFolder(false);
+                              }
+                            }}
+                            className="w-full px-2 py-1 text-xs rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 text-slate-900 dark:text-white"
+                          />
+                          <div className="flex justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setIsCreatingNewFolder(false)}
+                              className="px-2 py-0.5 text-[11px] rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 cursor-pointer"
+                            >
+                              {lang === 'ug' ? 'بىكار قىلىش' : 'Cancel'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAddNewFolder(newFolderNameInput)}
+                              className="px-2 py-0.5 text-[11px] font-medium rounded bg-indigo-600 text-white hover:bg-indigo-500 cursor-pointer"
+                            >
+                              {lang === 'ug' ? 'قۇرۇش' : 'Create'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsCreatingNewFolder(true)}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
+                        >
+                          <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>New folder</span>
+                        </button>
+                      )}
+
+                      {/* New Project */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onCreateNewSession) {
+                            onCreateNewSession();
+                          }
+                          const newProj = `project-${Math.floor(1000 + Math.random() * 9000)}`;
+                          handleAddNewFolder(newProj);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
+                      >
+                        <FolderPlus className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>New Project</span>
+                      </button>
+
+                      {/* Quick Start */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (onCreateNewSession) {
+                            onCreateNewSession();
+                          }
+                          handleSelectProject('Quick Start');
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white cursor-pointer transition-colors"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>Quick Start</span>
+                      </button>
+
+                      {/* Open Local Files / Folder (ھۆججەت تاللاش) */}
+                      <button
+                        type="button"
+                        onClick={() => projectFolderInputRef.current?.click()}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors font-medium"
+                      >
+                        <Upload className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                        <span>{lang === 'ug' ? 'ھۆججەت / قىسقۇچ ئېچىش...' : 'Open Folder / Files...'}</span>
+                      </button>
+
+                      {/* No Project */}
+                      <button
+                        type="button"
+                        onClick={() => handleSelectProject('No Project')}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer transition-colors"
+                      >
+                        <Ban className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>No Project</span>
+                      </button>
+                    </div>
+
+                    {/* Hidden Native File & Folder Input */}
+                    <input
+                      ref={projectFolderInputRef}
+                      type="file"
+                      multiple
+                      onChange={handleProjectFilesSelected}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Right side info (e.g. Chat History button + Context window) */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsHistoryOpen(true)}
+                  className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+                  title={lang === 'ug' ? 'پاراڭ تارىخى' : 'Chat History'}
+                >
+                  <History className="w-3.5 h-3.5" />
+                </button>
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
+                  {currentModelInfo.contextWindow}
+                </div>
+              </div>
+            </div>
+
+            {/* Main Textarea with User's Photo Placeholder */}
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  adjustTextareaHeight();
+                }}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  isRecording
+                    ? t.voiceInputListening
+                    : "Ask anything, @ to mention, / for actions"
+                }
+                className="w-full resize-none bg-transparent text-sm sm:text-base text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none whitespace-pre-wrap break-words break-all overflow-y-auto overflow-x-hidden leading-relaxed block transition-all px-0.5 py-1"
+                style={{ minHeight: '44px', maxHeight: '180px' }}
+              />
+            </div>
+
+            {/* Bottom Controls Row Matching User Photo */}
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+              {/* Left Group: (+) and [Gemini 3.7 Flash Medium v] and [📁 Local v] */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 1. Circular (+) Button with Floating Upward Popover */}
+                <div className="relative" ref={attachMenuRef}>
+                  <button
+                    id="chat-attach-plus-btn"
+                    type="button"
+                    onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                    className={`w-7 h-7 rounded-lg transition-all cursor-pointer flex items-center justify-center border shadow-xs ${
+                      isAttachMenuOpen
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 rotate-45 border-slate-900 dark:border-white'
+                        : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700'
+                    }`}
+                    title={lang === 'ug' ? 'Drive، ھۆججەت ياكى كامېرا قوشۇش (+)' : 'Attach Drive, Files or Camera (+)'}
+                  >
+                    <Plus className="w-4 h-4 transition-transform" />
+                  </button>
+
+                  {/* Popover Menu Opening Upwards Above (+) Button (Positioned safely inside container) */}
+                  {isAttachMenuOpen && (
+                    <div
+                      id="chat-attach-popover-menu"
+                      className={`absolute bottom-full mb-2 ${isRTL ? 'right-0' : 'left-0'} z-50 w-60 sm:w-64 max-w-[calc(100vw-2rem)] p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-md space-y-1 animate-in fade-in zoom-in-95 duration-150`}
+                      style={{ direction: isRTL ? 'rtl' : 'ltr' }}
+                    >
+                      {/* Drive */}
+                      <button
+                        id="attach-menu-drive-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          setIsDriveModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-emerald-50/80 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer text-inherit group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <HardDrive className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                              Drive
+                            </span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-100/70 dark:bg-emerald-950/80">
+                              Google
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block whitespace-nowrap">
+                            {lang === 'ug' ? 'گۇگېل دىرايۋ ھۆججىتى' : 'Cloud Docs & Sheets'}
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Upload Files */}
+                      <button
+                        id="attach-menu-upload-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          fileInputRef.current?.click();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-indigo-50/80 dark:hover:bg-indigo-950/40 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer text-inherit group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <Upload className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                              Upload Files
+                            </span>
+                            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold px-1.5 py-0.5 rounded bg-indigo-100/70 dark:bg-indigo-950/80">
+                              File
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block whitespace-nowrap">
+                            {lang === 'ug' ? 'ھۆججەت ياكى كود يوللاش' : 'Upload Docs & Code'}
+                          </span>
+                        </div>
+                      </button>
+
+                      {/* Camera */}
+                      <button
+                        id="attach-menu-camera-btn"
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          if (cameraInputRef.current) {
+                            cameraInputRef.current.click();
+                          } else {
+                            imageInputRef.current?.click();
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-blue-50/80 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer text-inherit group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <Camera className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                              Camera
+                            </span>
+                            <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold px-1.5 py-0.5 rounded bg-blue-100/70 dark:bg-blue-950/80">
+                              Photo
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block whitespace-nowrap">
+                            {lang === 'ug' ? 'كامېرا ياكى رەسىم تاللاش' : 'Take Photo / Image'}
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Gemini Model Selector (Matching User Photo: [ Gemini 3.7 Flash Medium v ]) */}
+                <div className="relative" ref={modelMenuRef}>
+                  <button
+                    id="chat-inline-model-selector-btn"
+                    type="button"
+                    onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs group"
+                    title={lang === 'ug' ? 'Gemini مودېلىنى تاللاش' : 'Select Gemini Model'}
+                  >
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                      {currentModelInfo.name}
+                    </span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isModelMenuOpen ? 'rotate-180 text-indigo-500' : ''}`} />
+                  </button>
+
+                  {/* Upward Floating Popover for Gemini Models */}
+                  {isModelMenuOpen && (
+                    <div
+                      id="chat-inline-model-popover"
+                      className={`absolute bottom-full mb-2 ${isRTL ? 'right-0' : 'left-0'} z-50 w-64 sm:w-72 max-w-[calc(100vw-2rem)] p-2 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl backdrop-blur-md space-y-1 animate-in fade-in zoom-in-95 duration-150`}
+                      style={{ direction: isRTL ? 'rtl' : 'ltr' }}
+                    >
+                      <div className="px-2.5 py-1 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                        <span>{lang === 'ug' ? 'Gemini ھەقسىز مودېللىرى' : 'Gemini Free Models'}</span>
+                        <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 font-semibold px-1.5 py-0.5 rounded">
+                          {GEMINI_MODELS.length} {lang === 'ug' ? 'نۇسخا' : 'Free'}
+                        </span>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto space-y-1 p-0.5">
+                        {GEMINI_MODELS.map((model) => {
+                          const isSelected = model.id === activeModelId;
+                          return (
+                            <button
+                              key={model.id}
+                              type="button"
+                              onClick={() => {
+                                if (onSelectModel) {
+                                  onSelectModel(model.id);
+                                }
+                                setIsModelMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer text-left ${
+                                isSelected
+                                  ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200/80 dark:border-indigo-800/80 shadow-2xs'
+                                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                              }`}
+                            >
+                              <div className="flex flex-col text-left min-w-0 pr-1.5">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-xs font-semibold truncate">{model.name}</span>
+                                  {model.isFreeTier && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300">
+                                      {lang === 'ug' ? 'ھەقسىز' : 'Free'}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                                  {lang === 'ug' ? model.badgeUg : model.badgeEn}
+                                </span>
+                              </div>
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 ml-1" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModelMenuOpen(false);
+                            setIsModelSelectorOpen(true);
+                          }}
+                          className="w-full text-center py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                        >
+                          {lang === 'ug' ? 'بارلىق مودېللارنى تەپسىلىي كۆرۈش...' : 'View all models & details...'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. [ 📁 Local v ] (Matching User Photo) */}
+                <button
+                  type="button"
+                  onClick={() => setIsCanvasOpen(!isCanvasOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer shadow-2xs"
+                  title={lang === 'ug' ? 'خىزمەت مۇھىتى: Local' : 'Execution Environment: Local'}
+                >
+                  <Folder className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Local</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                </button>
+              </div>
+
+              {/* Right Side: Voice Dictation & Send Button */}
+              <div className="flex items-center gap-1.5">
+                {/* Voice Recording Button */}
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  disabled={isTranscribingVoice}
+                  className={`w-7 h-7 rounded-lg transition-all cursor-pointer flex items-center justify-center border shadow-xs ${
+                    isRecording
+                      ? 'bg-rose-600 text-white animate-pulse shadow-md shadow-rose-600/30 ring-2 ring-rose-400 border-rose-600'
+                      : isTranscribingVoice
+                      ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-600 border-indigo-200 dark:border-indigo-800'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950 hover:text-rose-600 border-slate-200 dark:border-slate-700'
+                  }`}
+                  title={
+                    isRecording
+                      ? t.voiceInputStop
+                      : isTranscribingVoice
+                      ? lang === 'ug'
+                        ? 'ئاۋازنى تېكىستكە ئايلاندۇرۇۋاتىدۇ...'
+                        : 'Transcribing voice...'
+                      : t.voiceInputStart
+                  }
+                >
+                  {isTranscribingVoice ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : isRecording ? (
+                    <Mic className="w-3.5 h-3.5" />
+                  ) : (
+                    <MicOff className="w-3.5 h-3.5" />
+                  )}
+                </button>
+
+                {/* Send Button */}
+                <button
+                  type="submit"
+                  disabled={(!input.trim() && attachments.length === 0) || isLoading}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs font-medium text-xs disabled:opacity-40 transition-all cursor-pointer flex items-center gap-1"
+                  title={t.sendBtn}
+                >
+                  <span>{lang === 'ug' ? 'يوللاش' : 'Send'}</span>
+                  <Send className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Live Canvas Workspace in Split Mode */}
@@ -2301,6 +2936,33 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
           }
         }}
         lang={lang}
+      />
+
+      {/* Google Drive Modal */}
+      <GoogleDriveModal
+        isOpen={isDriveModalOpen}
+        onClose={() => setIsDriveModalOpen(false)}
+        onAttachDriveFile={(att) => setAttachments((prev) => [...prev, att])}
+        lang={lang}
+      />
+
+      {/* Gemini Side Drawer matching photo_2026-09-12_12-00-20.jpg */}
+      <GeminiSideDrawer
+        isOpen={isGeminiDrawerOpen}
+        onClose={() => setIsGeminiDrawerOpen(false)}
+        lang={lang}
+        chatSessions={chatSessions}
+        currentMessages={messages}
+        notes={notes}
+        onSaveNote={onSaveNote}
+        onNewChat={() => {
+          if (onCreateNewSession) {
+            onCreateNewSession();
+          }
+          setInput('');
+        }}
+        onSelectSession={onSelectSession}
+        onInsertTextIntoChat={(text) => setInput((prev) => (prev ? `${prev}\n${text}` : text))}
       />
     </div>
   );
