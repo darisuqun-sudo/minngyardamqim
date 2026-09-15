@@ -19,6 +19,14 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "30mb" }));
 
+// Normalize URL for Vercel Serverless Functions
+app.use((req, _res, next) => {
+  if (process.env.VERCEL && !req.url.startsWith("/api") && !req.url.startsWith("/assets")) {
+    req.url = "/api" + (req.url.startsWith("/") ? req.url : "/" + req.url);
+  }
+  next();
+});
+
 // Cross-Origin Resource Sharing (CORS) for Mobile Apps and Cloud deployments
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -2355,4 +2363,8 @@ async function setupViteOrStatic() {
   }
 }
 
-setupViteOrStatic();
+export default app;
+
+if (!process.env.VERCEL) {
+  setupViteOrStatic();
+}
