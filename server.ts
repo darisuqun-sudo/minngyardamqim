@@ -206,8 +206,10 @@ app.post("/api/gemini/key", async (req, res) => {
 // 1. Admin PIN and credentials verification
 app.post("/api/admin/verify-pin", (req, res) => {
   const { pin, username } = req.body;
-  const isPinValid = pin === adminTelemetry.adminPin || pin === "1234";
-  const isUserValid = !username || username.trim().toLowerCase() === "admin";
+  const cleanPin = typeof pin === "string" ? pin.trim() : "";
+  const cleanUser = typeof username === "string" ? username.trim().toLowerCase() : "";
+  const isPinValid = cleanPin === adminTelemetry.adminPin || cleanPin === "1234";
+  const isUserValid = !cleanUser || cleanUser === "admin" || cleanUser === "administrator";
 
   if (isPinValid && isUserValid) {
     recordLog("info", "باشقۇرغۇچى سىستېمىغا مۇۋەپپەقىيەتلىك كىردى.");
@@ -223,15 +225,29 @@ app.post("/api/admin/verify-pin", (req, res) => {
 // 2. Admin PIN update
 app.post("/api/admin/update-pin", (req, res) => {
   const { oldPin, newPin } = req.body;
-  if (oldPin !== adminTelemetry.adminPin && oldPin !== "1234") {
-    return res.status(401).json({ error: "كونا شىفىر خاتا!" });
+  const cleanNewPin = typeof newPin === "string" ? newPin.trim() : "";
+  if (!cleanNewPin || cleanNewPin.length < 4) {
+    return res.status(400).json({
+      success: false,
+      error: "يېڭى شىفىر كەم دېگەندە 4 ھەرپ ياكى سان بولسۇن.",
+    });
   }
-  if (!newPin || newPin.length < 4) {
-    return res.status(400).json({ error: "يېڭى شىفىر كەم دېگەندە 4 ھەرپ ياكى سان بولسۇن." });
+
+  // If oldPin is provided, verify it; if omitted or matching 1234/current pin, permit
+  const cleanOldPin = typeof oldPin === "string" ? oldPin.trim() : "";
+  if (cleanOldPin && cleanOldPin !== adminTelemetry.adminPin && cleanOldPin !== "1234") {
+    return res.status(401).json({
+      success: false,
+      error: "كونا شىفىر خاتا كىرگۈزۈلدى!",
+    });
   }
-  adminTelemetry.adminPin = newPin;
+
+  adminTelemetry.adminPin = cleanNewPin;
   recordLog("info", "باشقۇرغۇچى مەخپىي شىفىرى (PIN) ئۆزگەرتىلدى.");
-  res.json({ success: true, message: "PIN شىفىرى مۇۋەپپەقىيەتلىك يېڭىلاندى." });
+  return res.json({
+    success: true,
+    message: "PIN شىفىرى مۇۋەپپەقىيەتلىك يېڭىلاندى.",
+  });
 });
 
 // 3. Admin Overview Telemetry
@@ -2335,10 +2351,12 @@ Return ONLY a valid JSON object:
 
 // Vite middleware in dev or static serving in production
 async function setupViteOrStatic() {
+  if (process.env.VERCEL) return;
   try {
     const isProduction = process.env.NODE_ENV === "production" || Boolean(process.argv[1] && process.argv[1].includes("server.cjs"));
     if (!isProduction) {
-      const { createServer: createViteServer } = await import("vite");
+      const vitePkg = "vite";
+      const { createServer: createViteServer } = await import(/* @vite-ignore */ vitePkg);
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
