@@ -884,7 +884,7 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
         }
 
         const collectedFiles: File[] = [];
-        const MAX_FILES = 60;
+        const MAX_FILES = 25;
 
         const scanDir = async (handle: any, currentPath = '', depth = 0) => {
           if (depth > 4 || collectedFiles.length >= MAX_FILES) return;
@@ -899,7 +899,14 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
               name === '.next' ||
               name === '.vscode' ||
               name === '.idea' ||
-              name === '__pycache__'
+              name === '.gradle' ||
+              name === '__pycache__' ||
+              name === 'out' ||
+              name === 'target' ||
+              name.endsWith('.jar') ||
+              name.endsWith('.class') ||
+              name.endsWith('.apk') ||
+              name.endsWith('.bin')
             ) {
               continue;
             }
@@ -962,17 +969,23 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
     handleSelectProject(folderName);
 
     const relevantFiles = fileList.filter((f) => {
-      const p = (f as any).webkitRelativePath || f.name;
+      const p = ((f as any).webkitRelativePath || f.name).toLowerCase();
       return (
         !p.includes('node_modules/') &&
         !p.includes('.git/') &&
         !p.includes('dist/') &&
         !p.includes('build/') &&
-        !p.includes('.next/')
+        !p.includes('.next/') &&
+        !p.includes('.gradle/') &&
+        !p.includes('.idea/') &&
+        !p.includes('.vscode/') &&
+        !p.endsWith('.jar') &&
+        !p.endsWith('.class') &&
+        !p.endsWith('.apk')
       );
     });
 
-    await handleFiles(relevantFiles.slice(0, 60));
+    await handleFiles(relevantFiles.slice(0, 25));
     e.target.value = '';
   };
 

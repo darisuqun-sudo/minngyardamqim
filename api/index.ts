@@ -1,11 +1,10 @@
-import app from "../server";
+import app from "../server.ts";
 
 export default function handler(req: any, res: any) {
-  const matched = req.headers["x-matched-path"] || req.headers["x-vercel-matched-path"];
-  if (typeof matched === "string" && matched.startsWith("/api")) {
-    req.url = matched;
-  } else if (typeof req.url === "string" && !req.url.startsWith("/api")) {
-    req.url = `/api${req.url.startsWith("/") ? "" : "/"}${req.url}`;
+  // Normalize req.url so Express router receives /api/... path correctly
+  const rawUrl = req.url || "/";
+  if (!rawUrl.startsWith("/api") && !rawUrl.startsWith("/assets")) {
+    req.url = `/api${rawUrl.startsWith("/") ? "" : "/"}${rawUrl}`;
   }
   return app(req, res);
 }

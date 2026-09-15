@@ -2401,6 +2401,13 @@ async function setupViteOrStatic() {
 
 export default app;
 
-if (!process.env.VERCEL) {
+const isVercelRuntime = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.NOW_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME
+);
+
+if (!isVercelRuntime) {
   setupViteOrStatic();
 }

@@ -904,6 +904,33 @@ export default function App() {
         : [...messages, userMsg]
       ).slice(-8);
 
+      // Sanitize attachments for network payload to strictly stay under Vercel's 4.5MB limit:
+      // 1. Strip redundant `dataUrl` (dataUrl is only needed locally for <img>/<video> UI rendering)
+      // 2. Truncate auto-generated lockfiles (package-lock.json etc.) that can easily be 2MB+ of noise
+      // 3. Keep text content of code files reasonably capped
+      const sanitizedHistory = historyContext.map((m) => {
+        if (!m.attachments || m.attachments.length === 0) return m;
+        return {
+          ...m,
+          attachments: m.attachments.map((att) => {
+            const { dataUrl, ...rest } = att;
+            const isLockfile = /lock|node_modules|build|gradle-wrapper/i.test(rest.name);
+
+            let textContent = rest.textContent;
+            if (isLockfile && textContent && textContent.length > 4000) {
+              textContent = textContent.slice(0, 4000) + `\n... [${rest.name} قىسقارتىلدى]`;
+            } else if (textContent && textContent.length > 45000) {
+              textContent = textContent.slice(0, 45000) + `\n... [تېكىست چەكلىمە سەۋەبىدىن قىسقارتىلدى]`;
+            }
+
+            return {
+              ...rest,
+              textContent,
+            };
+          }),
+        };
+      });
+
       // Resilient fetch with automatic retry
       let res: Response | null = null;
       let lastFetchErr: any = null;
@@ -914,7 +941,7 @@ export default function App() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              messages: historyContext,
+              messages: sanitizedHistory,
               persona: personaId,
               model: chosenModel,
             }),
@@ -936,7 +963,15 @@ export default function App() {
       try {
         data = await res.json();
       } catch {
-        throw new Error(`Server returned HTTP ${res.status}`);
+        if (!res.ok) {
+          if (res.status === 413) {
+            throw new Error('PAYLOAD_TOO_LARGE: ھۆججەتلەرنىڭ ئومۇمىي ھەجىمى Vercel چەكلىمىسىدىن ئېشىپ كەتتى (4.5 MB)');
+          }
+          if (res.status === 504) {
+            throw new Error('GATEWAY_TIMEOUT: سۈنئىي ئىدراك مودېلى جاۋاب بېرىشتە ۋاقىت ئېشىپ كەتتى');
+          }
+          throw new Error(`Server returned HTTP ${res.status}`);
+        }
       }
 
       const replyContent = data.reply || data.fallback || 'جاۋاب ئېلىشتا خاتالىق كۆرۈلدى.';
@@ -972,29 +1007,47 @@ export default function App() {
         error?.message?.includes('connect') ||
         !navigator.onLine;
 
-      const offlineContent =
-        lang === 'ug'
-          ? `### ⚠️ مۇلازىمېتىر (Backend Server) ئۇلانمىدى!
+      const isPayloadTooLarge = error?.message?.includes('413') || error?.message?.includes('PAYLOAD_TOO_LARGE');
+      const isTimeout = error?.message?.includes('504') || error?.message?.includes('GATEWAY_TIMEOUT');
 
-كومپيۇتېرىڭىز قايتا قوزغالغانلىقتىن، تۈرنىڭ ئارقا مۇلازىمېتىرى (\`http://localhost:3000\`) تېخى قوزغالمىغان ياكى توختاپ قالغان.
+      let errorNotice = '';
+      if (isConnectionErr) {
+        errorNotice =
+          lang === 'ug'
+            ? `### ⚠️ مۇلازىمېتىر (Backend Server) ئۇلانمىدى!
 
-**ئەڭ ئاسان ھەل قىلىش چارىسى:**
-1. ئۈستەل يۈزىدىكى (Desktop) **«🚀 بېكەتنى قوزغىتىش (مىڭ ياردەمچىم)»** سىنبەلگىسىنى قوش چېكىپ قوزغىتىڭ.
-2. ياكى تۈر قىسقۇچىدا تۇرۇپ قايتا قوزغىتىڭ.
-3. مۇلازىمېتىر قوزغالغاندىن كېيىن، سوئالىڭىزنى قايتا ئەۋەتسىڭىزلا دەرھال نۇرمال ئىشلەيدۇ!`
-          : `### ⚠️ Backend Server Not Reachable!
+تۈرنىڭ ئارقا مۇلازىمېتىرىغا ئۇلىنىشتا كاشىلا كۆرۈلدى. تور ئۇلىنىشىڭىزنى ياكى مۇلازىمېتىرنى قايتا تەكشۈرۈپ كۆرۈڭ.`
+            : `### ⚠️ Backend Server Not Reachable!
+The local or cloud server is currently unreachable.`;
+      } else if (isPayloadTooLarge) {
+        errorNotice =
+          lang === 'ug'
+            ? `### ⚠️ ھۆججەتلەرنىڭ ئومۇمىي ھەجىمى چوڭ بولۇپ كەتتى!
 
-The local server at \`http://localhost:3000\` is offline or stopped.
-Please double-click the **"Start Server"** launcher on your Desktop to resume service.`;
+سىز ئەۋەتكەن ھۆججەتلەرنىڭ ئومۇمىي ھەجىمى مۇلازىمېتىر چەكلىمىسىدىن (4.5 MB) ئېشىپ كەتتى.
+**تەۋسىيە:**
+- ئاساسلىق كود ھۆججەتلىرىنى تاللاپ يوللاڭ (چوڭ قىسىلغان كۈتۈپخانا ياكى lock ھۆججەتلىرىنى چىقىرىۋېتىڭ).`
+            : `### ⚠️ Payload Too Large!
+The attached files exceeded the 4.5MB serverless limit. Please send only essential code files.`;
+      } else if (isTimeout) {
+        errorNotice =
+          lang === 'ug'
+            ? `### ⚠️ سۈنئىي ئىدراك جاۋاب بېرىشتە ۋاقىت ئېشىپ كەتتى!
+
+تۈردىكى ھۆججەتلەر كۆپ بولغاچقا، مودېل تەھلىل قىلىشتا بېكىتىلگەن ۋاقىتتىن ئېشىپ كەتتى. سۇئالىڭىزنى قايتا بېسىپ سىناپ بېقىڭ.`
+            : `### ⚠️ Request Timeout
+Processing all files took longer than the serverless timeout limit. Please retry.`;
+      } else {
+        errorNotice =
+          lang === 'ug'
+            ? `كەچۈرۈڭ، مۇلازىمېتىردىن جاۋاب ئېلىشتا خاتالىق يۈز بەردى (${error?.message || 'كاشىلا'}). قايتا سىناپ بېقىڭ.`
+            : `Sorry, failed to fetch AI response (${error?.message || 'error'}). Please try again.`;
+      }
 
       const errorMsg: ChatMessage = {
         id: `msg-err-${Date.now()}`,
         role: 'model',
-        content: isConnectionErr
-          ? offlineContent
-          : (lang === 'ug'
-            ? 'كەچۈرۈڭ، مۇلازىمېتىردىن جاۋاب ئېلىشتا خاتالىق يۈز بەردى. قايتا سىناپ بېقىڭ.'
-            : 'Sorry, failed to fetch AI response. Please try again.'),
+        content: errorNotice,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
