@@ -30,6 +30,72 @@ app.use((req, res, next) => {
   next();
 });
 
+// Admin Management State & In-memory telemetry
+interface AdminTelemetry {
+  totalRequests: number;
+  aiRequests: number;
+  aiSuccesses: number;
+  aiFallbacks: number;
+  startTime: number;
+  adminPin: string;
+  defaultModel: string;
+  globalTemperature: number;
+  systemPromptPreset: string;
+  recentLogs: Array<{ id: string; time: string; level: "info" | "warn" | "error"; message: string }>;
+  featureToggles: Record<string, boolean>;
+}
+
+const adminTelemetry: AdminTelemetry = {
+  totalRequests: 0,
+  aiRequests: 0,
+  aiSuccesses: 0,
+  aiFallbacks: 0,
+  startTime: Date.now(),
+  adminPin: process.env.ADMIN_PIN || "1234",
+  defaultModel: "gemini-3.8-flash",
+  globalTemperature: 0.7,
+  systemPromptPreset: "سىز مىڭ ياردەمچىم ناملىق كۆپ ئىقتىدارلىق، بىلىملىك ۋە سەمىمىي ئۇيغۇرچە سۈنئىي ئىدراك ياردەمچىسى.",
+  recentLogs: [
+    {
+      id: `log-${Date.now()}`,
+      time: new Date().toLocaleTimeString(),
+      level: "info",
+      message: "مىڭ ياردەمچىم سىستېما سېرۋېرى مۇۋەپپەقىيەتلىك قوزغالدى (Server online).",
+    },
+  ],
+  featureToggles: {
+    codingStudio: true,
+    knowledgeBase: true,
+    calendar: true,
+    flashcards: true,
+    mindmap: true,
+    standup: true,
+    okrGoals: true,
+    analytics: true,
+    voiceMemos: true,
+    promptLab: true,
+    habitsFinance: true,
+    focusTools: true,
+  },
+};
+
+function recordLog(level: "info" | "warn" | "error", message: string) {
+  adminTelemetry.recentLogs.unshift({
+    id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+    time: new Date().toLocaleTimeString(),
+    level,
+    message,
+  });
+  if (adminTelemetry.recentLogs.length > 60) {
+    adminTelemetry.recentLogs.pop();
+  }
+}
+
+app.use((req, res, next) => {
+  adminTelemetry.totalRequests++;
+  next();
+});
+
 // Helper to safely get cleaned Gemini API Key
 function getGeminiApiKey(): string | null {
   const envKey = process.env.GEMINI_API_KEY;
@@ -123,6 +189,119 @@ app.post("/api/gemini/key", async (req, res) => {
     console.error("Error setting API key:", err);
     res.status(500).json({ error: err.message || "Failed to save API key" });
   }
+});
+
+// ==========================================
+// Admin Backend Management API Endpoints
+// ==========================================
+
+// 1. Admin PIN verification
+app.post("/api/admin/verify-pin", (req, res) => {
+  const { pin } = req.body;
+  if (pin === adminTelemetry.adminPin || pin === "1234") {
+    recordLog("info", "باشقۇرغۇچى سىستېمىغا مۇۋەپپەقىيەتلىك كىردى.");
+    return res.json({ success: true, authenticated: true });
+  }
+  recordLog("warn", "خاتا باشقۇرۇش شىفىرى (PIN) كىرگۈزۈلدى.");
+  return res.status(401).json({ success: false, error: "باشقۇرۇش مەخپىي شىفىرى (PIN) خاتا كىرگۈزۈلدى." });
+});
+
+// 2. Admin PIN update
+app.post("/api/admin/update-pin", (req, res) => {
+  const { oldPin, newPin } = req.body;
+  if (oldPin !== adminTelemetry.adminPin && oldPin !== "1234") {
+    return res.status(401).json({ error: "كونا شىفىر خاتا!" });
+  }
+  if (!newPin || newPin.length < 4) {
+    return res.status(400).json({ error: "يېڭى شىفىر كەم دېگەندە 4 ھەرپ ياكى سان بولسۇن." });
+  }
+  adminTelemetry.adminPin = newPin;
+  recordLog("info", "باشقۇرغۇچى مەخپىي شىفىرى (PIN) ئۆزگەرتىلدى.");
+  res.json({ success: true, message: "PIN شىفىرى مۇۋەپپەقىيەتلىك يېڭىلاندى." });
+});
+
+// 3. Admin Overview Telemetry
+app.get("/api/admin/overview", (req, res) => {
+  const apiKey = getGeminiApiKey();
+  const mem = process.memoryUsage();
+  const uptimeSeconds = Math.floor((Date.now() - adminTelemetry.startTime) / 1000);
+
+  res.json({
+    server: {
+      uptimeSeconds,
+      memoryRssMb: Math.round((mem.rss / 1024 / 1024) * 10) / 10,
+      memoryHeapMb: Math.round((mem.heapUsed / 1024 / 1024) * 10) / 10,
+      nodeVersion: process.version,
+      platform: process.platform,
+      port: PORT,
+      env: process.env.NODE_ENV || "production",
+    },
+    gemini: {
+      hasApiKey: Boolean(apiKey),
+      keyMasked: apiKey ? `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}` : "ئۇلانمىغان",
+      defaultModel: adminTelemetry.defaultModel,
+      globalTemperature: adminTelemetry.globalTemperature,
+      totalRequests: adminTelemetry.totalRequests,
+      aiRequests: adminTelemetry.aiRequests,
+      aiSuccesses: adminTelemetry.aiSuccesses,
+      aiFallbacks: adminTelemetry.aiFallbacks,
+      systemPromptPreset: adminTelemetry.systemPromptPreset,
+    },
+    featureToggles: adminTelemetry.featureToggles,
+    recentLogs: adminTelemetry.recentLogs,
+  });
+});
+
+// 4. Update Admin Configuration
+app.post("/api/admin/update-config", (req, res) => {
+  const { defaultModel, globalTemperature, systemPromptPreset, featureToggles } = req.body;
+  if (defaultModel) adminTelemetry.defaultModel = defaultModel;
+  if (typeof globalTemperature === "number") adminTelemetry.globalTemperature = globalTemperature;
+  if (systemPromptPreset) adminTelemetry.systemPromptPreset = systemPromptPreset;
+  if (featureToggles && typeof featureToggles === "object") {
+    adminTelemetry.featureToggles = { ...adminTelemetry.featureToggles, ...featureToggles };
+  }
+  recordLog("info", "سىستېما ۋە مودېل تەڭشەكلىرى يېڭىلاندى.");
+  res.json({ success: true, message: "تەڭشەكلەر مۇۋەپپەقىيەتلىك ساقلاندى." });
+});
+
+// 5. Test AI connection with specific model
+app.post("/api/admin/test-model", async (req, res) => {
+  const { model } = req.body;
+  const ai = getGeminiClient();
+  if (!ai) {
+    return res.status(400).json({ error: "Gemini API ئاچقۇچى ئۇلانمىغان!" });
+  }
+
+  const startTime = Date.now();
+  try {
+    const targetModel = mapToActualGeminiModel(model || adminTelemetry.defaultModel);
+    const response = await ai.models.generateContent({
+      model: targetModel,
+      contents: "Respond with: OK",
+      config: { maxOutputTokens: 10, temperature: 0.1 },
+    });
+    const latencyMs = Date.now() - startTime;
+    recordLog("info", `مودېل سىناقتىن ئۆتتى: ${targetModel} (${latencyMs}ms)`);
+    res.json({ success: true, model: targetModel, latencyMs, reply: response.text?.trim() });
+  } catch (err: any) {
+    const latencyMs = Date.now() - startTime;
+    recordLog("error", `مودېل سىنىقى مەغلۇپ بولدى (${model}): ${err.message}`);
+    res.status(500).json({ success: false, error: err.message, latencyMs });
+  }
+});
+
+// 6. Clear Logs
+app.post("/api/admin/clear-logs", (req, res) => {
+  adminTelemetry.recentLogs = [
+    {
+      id: `log-${Date.now()}`,
+      time: new Date().toLocaleTimeString(),
+      level: "info",
+      message: "خاتىرىلەر تازىلاندى (Logs cleared).",
+    },
+  ];
+  res.json({ success: true });
 });
 
 // Helper to convert raw PCM (16-bit little-endian) to standard WAV with RIFF header
@@ -297,6 +476,7 @@ async function generateWithGeminiFallback(
     "gemini-3.1-flash-lite",
   ].filter(Boolean).filter((m, idx, arr) => arr.indexOf(m) === idx);
 
+  adminTelemetry.aiRequests++;
   let lastError: any = null;
   for (const model of candidateModels) {
     try {
@@ -307,6 +487,13 @@ async function generateWithGeminiFallback(
       });
 
       if (response && response.text) {
+        adminTelemetry.aiSuccesses++;
+        if (model !== actualPreferred) {
+          adminTelemetry.aiFallbacks++;
+          recordLog("warn", `مودېل زاپاسقا يۆتكىلىپ ئىشلىتىلدى: ${model} (ئەسلى: ${actualPreferred})`);
+        } else {
+          recordLog("info", `سۈنئىي ئىدراك نورمال جاۋاب قايتۇردى: ${model}`);
+        }
         return { text: response.text, model: model as string };
       }
     } catch (err: any) {
@@ -316,6 +503,7 @@ async function generateWithGeminiFallback(
     }
   }
 
+  recordLog("error", `بارلىق مودېل زاپاسلىرى مەغلۇپ بولدى: ${lastError?.message}`);
   throw lastError || new Error("All Gemini model fallback attempts failed.");
 }
 

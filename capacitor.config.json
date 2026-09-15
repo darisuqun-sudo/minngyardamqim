@@ -1,0 +1,13 @@
+﻿{
+  "appId": "com.minngyardamqim.app",
+  "appName": "مىڭ ياردەمچىم",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

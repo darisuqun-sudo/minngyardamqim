@@ -26,7 +26,8 @@ export type NavTab =
   | 'financeAndHabits'
   | 'productivity'
   | 'focus'
-  | 'settings';
+  | 'settings'
+  | 'admin';
 
 export type ThemeMode = 'light' | 'dark' | 'midnight' | 'oled' | 'sepia';
 

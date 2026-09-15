@@ -73,6 +73,7 @@ import { OKRGoalsView } from './components/OKRGoalsView';
 import { MorningBriefingModal } from './components/MorningBriefingModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { PWAInstallModal } from './components/PWAInstallModal';
+import { AdminDashboardView } from './components/AdminDashboardView';
 import { Footer } from './components/Footer';
 
 export default function App() {
@@ -1559,6 +1560,13 @@ Please double-click the **"Start Server"** launcher on your Desktop to resume se
             onExportAllData={handleExportAllData}
             onImportAllData={handleImportAllData}
             onResetDefaults={handleResetDefaults}
+          />
+        )}
+
+        {activeTab === 'admin' && (
+          <AdminDashboardView
+            lang={lang}
+            onExitAdmin={() => setActiveTab('dashboard')}
           />
         )}
       </main>

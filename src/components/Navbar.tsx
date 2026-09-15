@@ -28,6 +28,7 @@ import {
   Target,
   FileAudio,
   Code2,
+  Shield,
 } from 'lucide-react';
 import { AppLanguage, NavTab, ThemeMode } from '../types';
 import { TRANSLATIONS } from '../data/translations';
@@ -96,6 +97,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'productivity', label: t.tasksAndNotes, icon: CheckSquare },
     { id: 'focus', label: t.focusAndTools, icon: Timer },
     { id: 'settings', label: t.settings, icon: Settings },
+    { id: 'admin', label: lang === 'ug' ? 'باشقۇرۇش مەركىزى' : 'Admin Panel', icon: Shield },
   ];
 
   const languages: { code: AppLanguage; label: string; nativeName: string; flag: string }[] = [
@@ -286,6 +288,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Admin Dashboard Quick Button */}
+            <button
+              id="admin-dashboard-btn"
+              onClick={() => setActiveTab('admin')}
+              className={`p-2 rounded-xl border transition-all shadow-xs ${
+                activeTab === 'admin'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-600/20'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700'
+              }`}
+              title={lang === 'ug' ? 'ئارقا سۇپا باشقۇرۇش مەركىزى (Admin)' : 'Admin Dashboard'}
+            >
+              <Shield className={`w-4 h-4 ${activeTab === 'admin' ? 'text-white' : 'text-indigo-500'}`} />
+            </button>
 
             {/* Mobile / Tablet Menu Toggle */}
             <button
