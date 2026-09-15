@@ -132,6 +132,11 @@ function getGeminiClient(overrideKey?: string): GoogleGenAI | null {
   });
 }
 
+// API Base Route
+app.get("/api", (_req, res) => {
+  res.json({ status: "ok", message: "Ming Yardamqim API online", timestamp: new Date().toISOString() });
+});
+
 // Health check right at the beginning
 app.get("/api/health", (req, res) => {
   const apiKey = getGeminiApiKey();
@@ -2399,13 +2404,38 @@ async function setupViteOrStatic() {
   }
 }
 
-export default app;
+export default function handler(req: any, res: any) {
+  let targetUrl = req.url || "/";
+
+  // If Vercel rewrite passed ?__route=..., extract it cleanly
+  try {
+    const parsed = new URL(targetUrl, "http://localhost");
+    const routeParam = parsed.searchParams.get("__route");
+    if (routeParam !== null) {
+      targetUrl = `/api/${routeParam.replace(/^\/+/, "")}`;
+    }
+  } catch {}
+
+  // If req.originalUrl is available and points to an API path
+  if (req.originalUrl && req.originalUrl.startsWith("/api") && req.originalUrl !== "/api") {
+    targetUrl = req.originalUrl;
+  }
+
+  if (!targetUrl.startsWith("/api") && !targetUrl.startsWith("/assets")) {
+    targetUrl = `/api${targetUrl.startsWith("/") ? "" : "/"}${targetUrl}`;
+  }
+  req.url = targetUrl;
+  return app(req, res);
+}
+
+export { app };
 
 const isVercelRuntime = Boolean(
   process.env.VERCEL ||
   process.env.VERCEL_ENV ||
   process.env.NOW_REGION ||
-  process.env.AWS_LAMBDA_FUNCTION_NAME
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  (process.argv[1] && (process.argv[1].includes("api") || process.argv[1].includes("index.js")))
 );
 
 if (!isVercelRuntime) {
