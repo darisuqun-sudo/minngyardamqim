@@ -89,7 +89,23 @@ export default function App() {
     return (saved as ThemeMode) || 'light';
   });
 
-  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
+  // Check if current URL path or search query requests admin access
+  const checkIsAdminPath = () => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return (
+      path === '/admin' ||
+      path.startsWith('/admin/') ||
+      search.includes('admin=true') ||
+      hash === '#admin'
+    );
+  };
+
+  const [activeTab, setActiveTab] = useState<NavTab>(() => {
+    return checkIsAdminPath() ? 'admin' : 'dashboard';
+  });
   const [selectedPillarId, setSelectedPillarId] = useState<string>('frontend-ui');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
@@ -104,6 +120,40 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
+
+  // Sync browser URL with admin route & support discrete hotkey Ctrl+Shift+A
+  useEffect(() => {
+    const handleLocationChange = () => {
+      if (checkIsAdminPath()) {
+        setActiveTab('admin');
+      } else if (activeTab === 'admin') {
+        setActiveTab('dashboard');
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Secret Admin Hotkey: Ctrl + Shift + A or Cmd + Shift + A
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        setActiveTab((prev) => {
+          const next = prev === 'admin' ? 'dashboard' : 'admin';
+          if (next === 'admin') {
+            window.history.pushState({}, '', '/admin');
+          } else {
+            window.history.pushState({}, '', '/');
+          }
+          return next;
+        });
+      }
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeTab]);
 
   // Chat Sessions and active session state
   const DEFAULT_INITIAL_WELCOME: ChatMessage = {
@@ -1566,7 +1616,10 @@ Please double-click the **"Start Server"** launcher on your Desktop to resume se
         {activeTab === 'admin' && (
           <AdminDashboardView
             lang={lang}
-            onExitAdmin={() => setActiveTab('dashboard')}
+            onExitAdmin={() => {
+              window.history.pushState({}, '', '/');
+              setActiveTab('dashboard');
+            }}
           />
         )}
       </main>

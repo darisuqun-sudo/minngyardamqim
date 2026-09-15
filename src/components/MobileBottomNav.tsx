@@ -79,7 +79,6 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     { id: 'focus', label: lang === 'ug' ? 'زېھىن مەركەزلەشتۈرۈش' : t.focusAndTools, icon: Timer },
     { id: 'blueprint', label: lang === 'ug' ? 'قۇرۇلما پىلانى' : t.blueprint, icon: Sparkles },
     { id: 'settings', label: lang === 'ug' ? 'تەڭشەكلەر' : t.settings, icon: Settings },
-    { id: 'admin', label: lang === 'ug' ? 'باشقۇرۇش مەركىزى' : 'Admin Panel', icon: Shield },
   ];
 
   const handleSelectTab = (tab: NavTab) => {

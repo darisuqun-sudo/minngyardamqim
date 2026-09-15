@@ -203,15 +203,21 @@ app.post("/api/gemini/key", async (req, res) => {
 // Admin Backend Management API Endpoints
 // ==========================================
 
-// 1. Admin PIN verification
+// 1. Admin PIN and credentials verification
 app.post("/api/admin/verify-pin", (req, res) => {
-  const { pin } = req.body;
-  if (pin === adminTelemetry.adminPin || pin === "1234") {
+  const { pin, username } = req.body;
+  const isPinValid = pin === adminTelemetry.adminPin || pin === "1234";
+  const isUserValid = !username || username.trim().toLowerCase() === "admin";
+
+  if (isPinValid && isUserValid) {
     recordLog("info", "باشقۇرغۇچى سىستېمىغا مۇۋەپپەقىيەتلىك كىردى.");
     return res.json({ success: true, authenticated: true });
   }
-  recordLog("warn", "خاتا باشقۇرۇش شىفىرى (PIN) كىرگۈزۈلدى.");
-  return res.status(401).json({ success: false, error: "باشقۇرۇش مەخپىي شىفىرى (PIN) خاتا كىرگۈزۈلدى." });
+  recordLog("warn", "خاتا باشقۇرۇش ھېساباتى ياكى شىفىرى كىرگۈزۈلدى.");
+  return res.status(401).json({
+    success: false,
+    error: "باشقۇرغۇچى ھېساباتى ياكى مەخپىي شىفىرى (PIN) خاتا كىرگۈزۈلدى.",
+  });
 });
 
 // 2. Admin PIN update
