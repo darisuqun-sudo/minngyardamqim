@@ -400,12 +400,24 @@ function formatGeminiMessages(messages: InputMessage[]): { role: string; parts: 
           }
           if (att.base64Data && att.mimeType) {
             const cleanBase64 = att.base64Data.replace(/^data:[^;]+;base64,/, "");
-            parts.push({
-              inlineData: {
-                mimeType: att.mimeType,
-                data: cleanBase64,
-              },
-            });
+            const mime = (att.mimeType || '').toLowerCase();
+            const isSupportedInline =
+              mime.startsWith('image/') ||
+              mime.startsWith('audio/') ||
+              mime.startsWith('video/') ||
+              mime === 'application/pdf';
+
+            if (isSupportedInline) {
+              parts.push({
+                inlineData: {
+                  mimeType: att.mimeType,
+                  data: cleanBase64,
+                },
+              });
+            } else {
+              // Archive or other binary files that Gemini inlineData rejects
+              text += `\n\n[Attached Archive/Binary: ${att.name || 'File'} (${att.mimeType || 'binary'}) - File provided in session context]`;
+            }
           }
         }
       }

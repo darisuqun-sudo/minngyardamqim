@@ -55,6 +55,11 @@ import {
   Camera,
   HardDrive,
   FolderPlus,
+  FolderOpen,
+  FolderCheck,
+  Video,
+  Music,
+  Archive,
   Zap,
   Ban,
   Loader2,
@@ -213,6 +218,7 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
   const projectMenuRef = useRef<HTMLDivElement>(null);
   const projectSearchInputRef = useRef<HTMLInputElement>(null);
   const projectFolderInputRef = useRef<HTMLInputElement>(null);
+  const projectFilesInputRef = useRef<HTMLInputElement>(null);
 
   const handleSelectProject = (projectName: string) => {
     setSelectedProject(projectName);
@@ -242,43 +248,6 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
     handleSelectProject(trimmed);
     setNewFolderNameInput('');
     setIsCreatingNewFolder(false);
-  };
-
-  const handleProjectFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const fileList = Array.from(files);
-    const first = fileList[0];
-    const relPath = (first as any).webkitRelativePath || first.name;
-    const folderOrFileName = relPath.includes('/') ? relPath.split('/')[0] : first.name.replace(/\.[^/.]+$/, '');
-    const finalName = folderOrFileName || first.name;
-
-    if (!userProjects.includes(finalName)) {
-      const updated = [finalName, ...userProjects];
-      setUserProjects(updated);
-      localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
-    }
-    handleSelectProject(finalName);
-
-    // Also attach the chosen file(s) into chat attachment
-    fileList.slice(0, 5).forEach((f) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        setAttachments((prev) => [
-          ...prev,
-          {
-            id: `proj-file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            name: f.name,
-            type: f.type.startsWith('image/') ? 'image' : 'file',
-            mimeType: f.type || 'application/octet-stream',
-            size: f.size,
-            dataUrl: content,
-          },
-        ]);
-      };
-      reader.readAsDataURL(f);
-    });
   };
 
   useEffect(() => {
@@ -768,95 +737,261 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
     }
   };
 
-  // File Upload Handlers
+  // File Upload Handlers (Multimodal: Images, Video, Audio, Archives, Code & Docs)
   const handleFiles = async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     const newAttachments: ChatAttachment[] = [];
 
     for (const file of fileArray) {
-      const isImg = file.type.startsWith('image/');
-      const isPdf = file.type === 'application/pdf';
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isImg =
+        file.type.startsWith('image/') ||
+        ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico', 'tiff'].includes(ext);
+
+      const isVideo =
+        file.type.startsWith('video/') ||
+        ['mp4', 'webm', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'm4v', '3gp'].includes(ext);
+
+      const isAudio =
+        file.type.startsWith('audio/') ||
+        ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma', 'opus'].includes(ext);
+
+      const isArchive =
+        ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'iso', 'xz'].includes(ext) ||
+        file.type.includes('zip') ||
+        file.type.includes('compressed') ||
+        file.type.includes('tar');
+
+      const isPdf = file.type === 'application/pdf' || ext === 'pdf';
+
       const isText =
         file.type.startsWith('text/') ||
-        file.name.endsWith('.ts') ||
-        file.name.endsWith('.tsx') ||
-        file.name.endsWith('.js') ||
-        file.name.endsWith('.jsx') ||
-        file.name.endsWith('.py') ||
-        file.name.endsWith('.json') ||
-        file.name.endsWith('.md') ||
-        file.name.endsWith('.csv') ||
-        file.name.endsWith('.sql') ||
-        file.name.endsWith('.html') ||
-        file.name.endsWith('.css');
+        [
+          'txt', 'md', 'markdown', 'json', 'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
+          'py', 'html', 'htm', 'css', 'scss', 'sass', 'less', 'sql', 'csv', 'tsv',
+          'xml', 'yaml', 'yml', 'env', 'sh', 'bash', 'ps1', 'bat', 'cmd', 'c',
+          'cpp', 'h', 'hpp', 'cs', 'java', 'go', 'rs', 'php', 'rb', 'swift', 'kt',
+          'dart', 'toml', 'ini', 'cfg', 'conf', 'log', 'gitignore', 'dockerfile'
+        ].includes(ext);
 
-      if (isImg) {
-        const dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        const base64Data = dataUrl.split(',')[1] || '';
-        newAttachments.push({
-          id: `att-${Date.now()}-${Math.random()}`,
-          name: file.name,
-          type: 'image',
-          mimeType: file.type || 'image/png',
-          size: file.size,
-          dataUrl,
-          base64Data,
-        });
-      } else if (isPdf) {
-        const dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        const base64Data = dataUrl.split(',')[1] || '';
-        newAttachments.push({
-          id: `att-${Date.now()}-${Math.random()}`,
-          name: file.name,
-          type: 'file',
-          mimeType: 'application/pdf',
-          size: file.size,
-          dataUrl,
-          base64Data,
-        });
-      } else if (isText) {
-        const textContent = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsText(file);
-        });
-        newAttachments.push({
-          id: `att-${Date.now()}-${Math.random()}`,
-          name: file.name,
-          type: 'file',
-          mimeType: file.type || 'text/plain',
-          size: file.size,
-          textContent,
-        });
+      let mimeType = file.type;
+      if (!mimeType || mimeType === 'application/octet-stream') {
+        if (isImg) mimeType = `image/${ext === 'jpg' ? 'jpeg' : (ext === 'svg' ? 'svg+xml' : ext)}`;
+        else if (isVideo) mimeType = `video/${ext === 'mov' ? 'quicktime' : ext}`;
+        else if (isAudio) mimeType = `audio/${ext === 'mp3' ? 'mpeg' : ext}`;
+        else if (isArchive) mimeType = ext === 'zip' ? 'application/zip' : 'application/x-zip-compressed';
+        else if (isPdf) mimeType = 'application/pdf';
+        else if (isText) mimeType = ext === 'json' ? 'application/json' : 'text/plain';
+        else mimeType = 'application/octet-stream';
+      }
+
+      let attachmentType: 'image' | 'video' | 'audio' | 'archive' | 'file' = 'file';
+      if (isImg) attachmentType = 'image';
+      else if (isVideo) attachmentType = 'video';
+      else if (isAudio) attachmentType = 'audio';
+      else if (isArchive) attachmentType = 'archive';
+
+      // 1. Text or code files: Read text content so AI can understand code & docs
+      if (isText && file.size < 2 * 1024 * 1024) {
+        try {
+          const textContent = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string) || '');
+            reader.onerror = () => resolve('');
+            reader.readAsText(file);
+          });
+          newAttachments.push({
+            id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: file.name,
+            type: 'file',
+            mimeType,
+            size: file.size,
+            textContent,
+          });
+          continue;
+        } catch {
+          // fall through to dataUrl
+        }
+      }
+
+      // 2. Images, Video, Audio, Archives, and generic files (under 35MB)
+      if (file.size <= 35 * 1024 * 1024) {
+        try {
+          const dataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve((reader.result as string) || '');
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file);
+          });
+          const base64Data = dataUrl.split(',')[1] || '';
+
+          newAttachments.push({
+            id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: file.name,
+            type: attachmentType,
+            mimeType,
+            size: file.size,
+            dataUrl,
+            base64Data,
+          });
+        } catch (err) {
+          console.warn('Cannot read file as dataUrl:', file.name, err);
+          newAttachments.push({
+            id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name: file.name,
+            type: attachmentType,
+            mimeType,
+            size: file.size,
+          });
+        }
       } else {
-        // Generic file fallback
-        const dataUrl = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        const base64Data = dataUrl.split(',')[1] || '';
+        // Large file indicator
         newAttachments.push({
-          id: `att-${Date.now()}-${Math.random()}`,
+          id: `att-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           name: file.name,
-          type: 'file',
-          mimeType: file.type || 'application/octet-stream',
+          type: attachmentType,
+          mimeType,
           size: file.size,
-          dataUrl,
-          base64Data,
+          textContent: `[ھۆججەت: ${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)]`,
         });
       }
     }
 
     setAttachments((prev) => [...prev, ...newAttachments]);
+  };
+
+  // Folder & Directory Picker (Handles unzipped folders & project directories)
+  const handleOpenProjectDirectory = async () => {
+    setIsProjectMenuOpen(false);
+    setIsAttachMenuOpen(false);
+
+    // Method 1: Modern File System Access API
+    if (typeof window !== 'undefined' && typeof (window as any).showDirectoryPicker === 'function') {
+      try {
+        const dirHandle = await (window as any).showDirectoryPicker({
+          mode: 'read',
+        });
+        if (!dirHandle) return;
+
+        const folderName = dirHandle.name;
+        if (folderName) {
+          if (!userProjects.includes(folderName)) {
+            const updated = [folderName, ...userProjects];
+            setUserProjects(updated);
+            localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
+          }
+          handleSelectProject(folderName);
+        }
+
+        const collectedFiles: File[] = [];
+        const MAX_FILES = 60;
+
+        const scanDir = async (handle: any, currentPath = '', depth = 0) => {
+          if (depth > 4 || collectedFiles.length >= MAX_FILES) return;
+          for await (const entry of handle.values()) {
+            if (collectedFiles.length >= MAX_FILES) break;
+            const name = entry.name;
+            if (
+              name === 'node_modules' ||
+              name === '.git' ||
+              name === 'dist' ||
+              name === 'build' ||
+              name === '.next' ||
+              name === '.vscode' ||
+              name === '.idea' ||
+              name === '__pycache__'
+            ) {
+              continue;
+            }
+            if (entry.kind === 'file') {
+              try {
+                const file = await entry.getFile();
+                const rel = currentPath ? `${currentPath}/${name}` : name;
+                Object.defineProperty(file, 'webkitRelativePath', {
+                  value: rel,
+                  writable: true,
+                  configurable: true,
+                });
+                collectedFiles.push(file);
+              } catch (err) {
+                console.warn('Could not read file from directory:', name, err);
+              }
+            } else if (entry.kind === 'directory') {
+              await scanDir(entry, currentPath ? `${currentPath}/${name}` : name, depth + 1);
+            }
+          }
+        };
+
+        await scanDir(dirHandle);
+
+        if (collectedFiles.length > 0) {
+          await handleFiles(collectedFiles);
+        }
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // User cancelled
+        console.warn('showDirectoryPicker error or not supported, trying input fallback:', err);
+      }
+    }
+
+    // Method 2: Fallback to input with webkitdirectory
+    if (projectFolderInputRef.current) {
+      projectFolderInputRef.current.click();
+    }
+  };
+
+  const handleProjectDirectorySelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const fileList = Array.from(files);
+
+    const first = fileList[0];
+    const relPath = (first as any).webkitRelativePath || '';
+    let folderName = 'Project';
+    if (relPath.includes('/')) {
+      folderName = relPath.split('/')[0];
+    } else if (first.name) {
+      folderName = first.name.replace(/\.[^/.]+$/, '');
+    }
+
+    if (folderName && !userProjects.includes(folderName)) {
+      const updated = [folderName, ...userProjects];
+      setUserProjects(updated);
+      localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
+    }
+    handleSelectProject(folderName);
+
+    const relevantFiles = fileList.filter((f) => {
+      const p = (f as any).webkitRelativePath || f.name;
+      return (
+        !p.includes('node_modules/') &&
+        !p.includes('.git/') &&
+        !p.includes('dist/') &&
+        !p.includes('build/') &&
+        !p.includes('.next/')
+      );
+    });
+
+    await handleFiles(relevantFiles.slice(0, 60));
+    e.target.value = '';
+  };
+
+  const handleUniversalFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const fileList = Array.from(files);
+
+    const first = fileList[0];
+    const projName = first.name.replace(/\.[^/.]+$/, '') || first.name;
+    if (projName && !userProjects.includes(projName)) {
+      const updated = [projName, ...userProjects];
+      setUserProjects(updated);
+      localStorage.setItem('gemini_user_projects', JSON.stringify(updated));
+    }
+    handleSelectProject(projName);
+
+    await handleFiles(fileList);
+    e.target.value = '';
   };
 
   const handleRemoveAttachment = (id: string) => {
@@ -971,19 +1106,45 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
     if (att.mimeType === 'application/google-drive' || att.driveUrl) {
       return <HardDrive className="w-4 h-4 text-emerald-500" />;
     }
-    if (att.type === 'image') return <ImageIcon className="w-4 h-4 text-emerald-500" />;
-    if (att.name.endsWith('.pdf')) return <FileText className="w-4 h-4 text-rose-500" />;
+    const ext = att.name.split('.').pop()?.toLowerCase() || '';
+    if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
+      return <ImageIcon className="w-4 h-4 text-emerald-500" />;
+    }
     if (
-      att.name.endsWith('.ts') ||
-      att.name.endsWith('.tsx') ||
-      att.name.endsWith('.js') ||
-      att.name.endsWith('.py') ||
-      att.name.endsWith('.json') ||
-      att.name.endsWith('.sql')
+      att.type === 'video' ||
+      att.mimeType?.startsWith('video/') ||
+      ['mp4', 'webm', 'mkv', 'avi', 'mov', 'flv', 'wmv', 'm4v', '3gp'].includes(ext)
+    ) {
+      return <Video className="w-4 h-4 text-purple-500" />;
+    }
+    if (
+      att.type === 'audio' ||
+      att.mimeType?.startsWith('audio/') ||
+      ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'].includes(ext)
+    ) {
+      return <Music className="w-4 h-4 text-amber-500" />;
+    }
+    if (
+      att.type === 'archive' ||
+      ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'iso'].includes(ext) ||
+      att.mimeType?.includes('zip') ||
+      att.mimeType?.includes('compressed')
+    ) {
+      return <Archive className="w-4 h-4 text-amber-600" />;
+    }
+    if (att.name.endsWith('.pdf') || att.mimeType === 'application/pdf') {
+      return <FileText className="w-4 h-4 text-rose-500" />;
+    }
+    if (
+      [
+        'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'py', 'json', 'sql', 'html',
+        'htm', 'css', 'scss', 'sass', 'php', 'java', 'cpp', 'c', 'h', 'cs',
+        'go', 'rs', 'swift', 'kt', 'dart', 'sh', 'bat', 'yml', 'yaml', 'xml', 'md'
+      ].includes(ext)
     ) {
       return <FileCode className="w-4 h-4 text-indigo-500" />;
     }
-    if (att.name.endsWith('.csv') || att.name.endsWith('.xlsx')) {
+    if (['csv', 'xlsx', 'xls'].includes(ext)) {
       return <FileSpreadsheet className="w-4 h-4 text-emerald-600" />;
     }
     return <File className="w-4 h-4 text-blue-500" />;
@@ -1494,6 +1655,43 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                             );
                           }
 
+                          if (att.type === 'video' && att.dataUrl) {
+                            return (
+                              <div
+                                key={att.id}
+                                className="rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-black/5 dark:bg-black/30 p-1.5 max-w-xs"
+                              >
+                                <video
+                                  controls
+                                  src={att.dataUrl}
+                                  className="max-h-48 rounded-lg w-full object-contain"
+                                />
+                                <div className="flex items-center justify-between px-1 pt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                  <span className="truncate max-w-[150px] font-medium">{att.name}</span>
+                                  <span>{formatFileSize(att.size)}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          if (att.type === 'audio' && att.dataUrl) {
+                            return (
+                              <div
+                                key={att.id}
+                                className="flex flex-col gap-1 p-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 min-w-[220px]"
+                              >
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-900 dark:text-amber-200">
+                                  <Music className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                  <span className="truncate max-w-[180px]">{att.name}</span>
+                                </div>
+                                <audio controls src={att.dataUrl} className="h-8 w-full" />
+                                <div className="text-[10px] text-amber-700/70 dark:text-amber-400/70 text-right">
+                                  {formatFileSize(att.size)}
+                                </div>
+                              </div>
+                            );
+                          }
+
                           return (
                             <div
                               key={att.id}
@@ -1517,6 +1715,10 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                               {att.driveUrl ? (
                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
                                   Drive
+                                </span>
+                              ) : att.type === 'archive' ? (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300">
+                                  ZIP
                                 </span>
                               ) : (
                                 <span className="text-[10px] opacity-70">
@@ -1754,9 +1956,26 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                     </div>
                   )}
                   <div className="text-left">
-                    <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">
-                      {att.name}
-                    </p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[120px]">
+                        {att.name}
+                      </p>
+                      {att.type === 'video' && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 font-bold">
+                          Video
+                        </span>
+                      )}
+                      {att.type === 'audio' && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-300 font-bold">
+                          Audio
+                        </span>
+                      )}
+                      {att.type === 'archive' && (
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-300 font-bold">
+                          ZIP
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[9px] text-slate-400">{formatFileSize(att.size)}</p>
                   </div>
                   <button
@@ -2076,14 +2295,38 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                         <span>Quick Start</span>
                       </button>
 
-                      {/* Open Local Files / Folder (ھۆججەت تاللاش) */}
+                      {/* Open Unzipped Folder / Project Directory (ھۆججەت قىسقۇچ ئېچىش) */}
                       <button
                         type="button"
-                        onClick={() => projectFolderInputRef.current?.click()}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors font-medium"
+                        onClick={handleOpenProjectDirectory}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50/70 dark:hover:bg-indigo-950/40 cursor-pointer transition-colors font-medium text-left"
                       >
-                        <Upload className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                        <span>{lang === 'ug' ? 'ھۆججەت / قىسقۇچ ئېچىش...' : 'Open Folder / Files...'}</span>
+                        <div className="flex items-center gap-2 truncate">
+                          <FolderOpen className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <span className="truncate">
+                            {lang === 'ug' ? 'ھۆججەت قىسقۇچ ئېچىش (يېشىلگەن ZIP)' : 'Open Folder / Unzipped Project...'}
+                          </span>
+                        </div>
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/60 font-semibold shrink-0">
+                          Folder
+                        </span>
+                      </button>
+
+                      {/* Select Any Files (رەسىم، سىن، ئاۋاز، ZIP، بارلىق ھۆججەتلەر) */}
+                      <button
+                        type="button"
+                        onClick={() => projectFilesInputRef.current?.click()}
+                        className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50/70 dark:hover:bg-emerald-950/40 cursor-pointer transition-colors font-medium text-left"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Upload className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span className="truncate">
+                            {lang === 'ug' ? 'ھەرقانداق ھۆججەت تاللاش (سىن، ئاۋاز، رەسىم، ZIP...)' : 'Open Any Files (Media, Audio, ZIP...)'}
+                          </span>
+                        </div>
+                        <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 font-semibold shrink-0">
+                          All Files
+                        </span>
                       </button>
 
                       {/* No Project */}
@@ -2097,12 +2340,25 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                       </button>
                     </div>
 
-                    {/* Hidden Native File & Folder Input */}
+                    {/* Hidden Native Directory Input (with webkitdirectory for folders) */}
                     <input
                       ref={projectFolderInputRef}
                       type="file"
+                      // @ts-ignore
+                      webkitdirectory=""
+                      directory=""
                       multiple
-                      onChange={handleProjectFilesSelected}
+                      onChange={handleProjectDirectorySelected}
+                      className="hidden"
+                    />
+
+                    {/* Hidden Native Universal File Input (accept all file types) */}
+                    <input
+                      ref={projectFilesInputRef}
+                      type="file"
+                      multiple
+                      accept="*/*"
+                      onChange={handleUniversalFilesSelected}
                       className="hidden"
                     />
                   </div>
@@ -2201,6 +2457,33 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                         </div>
                       </button>
 
+                      {/* Open Unzipped Folder / Project */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAttachMenuOpen(false);
+                          handleOpenProjectDirectory();
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-amber-50/80 dark:hover:bg-amber-950/40 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer text-inherit group"
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                          <FolderOpen className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                              {lang === 'ug' ? 'ھۆججەت قىسقۇچىنى تاللاش' : 'Open Folder'}
+                            </span>
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold px-1.5 py-0.5 rounded bg-amber-100/70 dark:bg-amber-950/80">
+                              Folder
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500 dark:text-slate-400 block whitespace-nowrap">
+                            {lang === 'ug' ? 'يېشىلگەن ZIP ياكى تۈر قىسقۇچى' : 'Unzipped Folder or Project'}
+                          </span>
+                        </div>
+                      </button>
+
                       {/* Upload Files */}
                       <button
                         id="attach-menu-upload-btn"
@@ -2217,14 +2500,14 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-1">
                             <span className="text-xs font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                              Upload Files
+                              {lang === 'ug' ? 'ھەرقانداق ھۆججەت يوللاش' : 'Upload Any Files'}
                             </span>
                             <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold px-1.5 py-0.5 rounded bg-indigo-100/70 dark:bg-indigo-950/80">
-                              File
+                              All Files
                             </span>
                           </div>
                           <span className="text-[11px] text-slate-500 dark:text-slate-400 block whitespace-nowrap">
-                            {lang === 'ug' ? 'ھۆججەت ياكى كود يوللاش' : 'Upload Docs & Code'}
+                            {lang === 'ug' ? 'رەسىم، سىن، ئاۋاز، ZIP، كود قاتارلىقلار' : 'Images, Video, Audio, ZIP & Docs'}
                           </span>
                         </div>
                       </button>

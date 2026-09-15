@@ -31,10 +31,12 @@ export type NavTab =
 
 export type ThemeMode = 'light' | 'dark' | 'midnight' | 'oled' | 'sepia';
 
+export type ChatAttachmentType = 'image' | 'video' | 'audio' | 'archive' | 'file';
+
 export interface ChatAttachment {
   id: string;
   name: string;
-  type: 'image' | 'file';
+  type: ChatAttachmentType;
   mimeType: string;
   size: number;
   dataUrl?: string;
