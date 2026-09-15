@@ -307,48 +307,65 @@ export const GeminiSideDrawer: React.FC<GeminiSideDrawerProps> = ({
   return (
     <div
       id="gemini-side-drawer-backdrop"
-      className={`fixed inset-0 z-50 bg-transparent flex ${
-        isRTL ? 'justify-end' : 'justify-start'
-      }`}
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs transition-opacity duration-300"
       onClick={onClose}
     >
       <div
         id="gemini-side-drawer-panel"
-        className={`w-full max-w-[320px] sm:max-w-[340px] h-full bg-white dark:bg-slate-900 border-${
-          isRTL ? 'l' : 'r'
-        } border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col text-slate-800 dark:text-slate-100 ${
+        className={`fixed top-0 bottom-0 ${
+          isRTL ? 'right-0 border-l' : 'left-0 border-r'
+        } w-[300px] sm:w-[330px] max-w-[88vw] h-full bg-[#fbfdfc] dark:bg-[#131314] border-slate-200/80 dark:border-slate-800 shadow-2xl flex flex-col text-slate-800 dark:text-slate-100 ${
           isRTL ? 'animate-in slide-in-from-right' : 'animate-in slide-in-from-left'
-        } duration-200`}
+        } duration-300 ease-out z-50`}
         onClick={(e) => e.stopPropagation()}
         style={{ direction: isRTL ? 'rtl' : 'ltr' }}
       >
-        {/* Top Header Bar matching Image 1: [ ✕ ] on one side, [ Gemini ] on the other */}
-        <div className="p-4 flex items-center justify-between shrink-0 select-none border-b border-slate-100 dark:border-slate-800/80">
-          {/* Close button (✕) */}
-          <button
-            id="gemini-drawer-close-btn"
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded-full text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            title={lang === 'ug' ? 'تاقاش' : 'Close'}
-          >
-            <X className="w-5 h-5" />
-          </button>
-
-          {/* Gemini Title */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-xl font-medium tracking-tight text-slate-900 dark:text-white font-sans">
-              Gemini
-            </span>
-          </div>
+        {/* Top Header Bar matching Image 2 */}
+        <div className="px-5 py-4 flex items-center justify-between shrink-0 select-none border-b border-slate-100/80 dark:border-slate-800/60">
+          {isRTL ? (
+            <>
+              {/* In RTL: Title is on the right, X is on the left */}
+              <div className="flex items-center gap-2">
+                <span className="text-[22px] font-semibold tracking-tight text-slate-900 dark:text-white font-sans">
+                  Gemini
+                </span>
+              </div>
+              <button
+                id="gemini-drawer-close-btn"
+                type="button"
+                onClick={onClose}
+                className="p-2 -ml-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title={lang === 'ug' ? 'تاقاش' : 'Close'}
+              >
+                <X className="w-5 h-5" strokeWidth={1.8} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                id="gemini-drawer-close-btn"
+                type="button"
+                onClick={onClose}
+                className="p-2 -mr-1 rounded-full text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" strokeWidth={1.8} />
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="text-[22px] font-semibold tracking-tight text-slate-900 dark:text-white font-sans">
+                  Gemini
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Drawer Body */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-          {/* Main Menu View matching Image 1 (photo_2026-09-12_12-00-20.jpg) */}
+        <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-1">
+          {/* Main Menu View matching Image 2 */}
           {currentView === 'menu' && (
             <div className="space-y-1">
-              {/* 1. محادثة جديدة / يېڭى سۆھبەت */}
+              {/* 1. محادثة جديدة / يېڭى سۆھبەت matching Image 2 */}
               <button
                 id="gemini-menu-new-chat-btn"
                 type="button"
@@ -356,96 +373,92 @@ export const GeminiSideDrawer: React.FC<GeminiSideDrawerProps> = ({
                   onNewChat();
                   onClose();
                 }}
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl bg-slate-100/90 dark:bg-slate-800/80 text-slate-900 dark:text-white hover:bg-slate-200/70 dark:hover:bg-slate-700/80 transition-all cursor-pointer text-start font-medium text-sm group"
+                className="w-full flex items-center gap-3.5 px-4 py-3 rounded-full bg-[#f0f4f9] dark:bg-[#1e1f20] text-slate-900 dark:text-white hover:bg-[#dfe4ec] dark:hover:bg-[#282a2c] transition-all cursor-pointer font-medium text-[15px] group mb-1.5"
               >
-                <div className="w-5 h-5 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <SquarePen className="w-5 h-5" />
+                <div className="w-5 h-5 text-slate-800 dark:text-slate-200 flex items-center justify-center shrink-0">
+                  <SquarePen className="w-5 h-5" strokeWidth={1.8} />
                 </div>
-                <span className="flex-1 text-sm font-medium">
+                <span className="flex-1 text-start">
                   {lang === 'ug' ? 'يېڭى سۆھبەت' : lang === 'ar' ? 'محادثة جديدة' : 'New chat'}
                 </span>
               </button>
 
-              {/* 2. البحث في المحادثات / سۆھبەتلەرنى ئىزدەش */}
+              {/* 2. البحث في المحادثات / سۆھبەتلەرنى ئىزدەش matching Image 2 */}
               <button
                 id="gemini-menu-search-chats-btn"
                 type="button"
                 onClick={() => setCurrentView('search')}
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-all cursor-pointer text-start font-medium text-sm group"
+                className="w-full flex items-center gap-3.5 px-4 py-3 rounded-full text-slate-800 dark:text-slate-200 hover:bg-[#f0f4f9] dark:hover:bg-[#1e1f20] transition-all cursor-pointer font-normal text-[15px] group"
               >
-                <div className="w-5 h-5 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <Search className="w-5 h-5" />
+                <div className="w-5 h-5 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                  <Search className="w-5 h-5" strokeWidth={1.8} />
                 </div>
-                <span className="flex-1 text-sm font-medium">
-                  {lang === 'ug' ? 'سۆھبەتلەرنى ئىزدەش' : lang === 'ar' ? 'البحث في المحادثات' : 'Search chats'}
+                <span className="flex-1 text-start">
+                  {lang === 'ug' ? 'سۆھبەتلەرنى ئىزدەش' : lang === 'ar' ? 'البحث في المحادثات' : 'Search in chats'}
                 </span>
               </button>
 
-              {/* 3. الصور / رەسىملەر */}
+              {/* 3. الصور / رەسىملەر matching Image 2 */}
               <button
                 id="gemini-menu-images-btn"
                 type="button"
                 onClick={() => setCurrentView('images')}
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-all cursor-pointer text-start font-medium text-sm group"
+                className="w-full flex items-center gap-3.5 px-4 py-3 rounded-full text-slate-800 dark:text-slate-200 hover:bg-[#f0f4f9] dark:hover:bg-[#1e1f20] transition-all cursor-pointer font-normal text-[15px] group"
               >
-                <div className="w-5 h-5 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <ImageIcon className="w-5 h-5" />
+                <div className="w-5 h-5 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                  <ImageIcon className="w-5 h-5" strokeWidth={1.8} />
                 </div>
-                <span className="flex-1 text-sm font-medium">
+                <span className="flex-1 text-start">
                   {lang === 'ug' ? 'رەسىملەر' : lang === 'ar' ? 'الصور' : 'Images'}
                 </span>
               </button>
 
-              {/* 4. فيديوهات / سىنلار */}
+              {/* 4. فيديوهات / سىنلار matching Image 2 */}
               <button
                 id="gemini-menu-videos-btn"
                 type="button"
                 onClick={() => setCurrentView('videos')}
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-all cursor-pointer text-start font-medium text-sm group"
+                className="w-full flex items-center gap-3.5 px-4 py-3 rounded-full text-slate-800 dark:text-slate-200 hover:bg-[#f0f4f9] dark:hover:bg-[#1e1f20] transition-all cursor-pointer font-normal text-[15px] group"
               >
-                <div className="w-5 h-5 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <Video className="w-5 h-5" />
+                <div className="w-5 h-5 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                  <Film className="w-5 h-5" strokeWidth={1.8} />
                 </div>
-                <span className="flex-1 text-sm font-medium">
+                <span className="flex-1 text-start">
                   {lang === 'ug' ? 'سىنلار' : lang === 'ar' ? 'فيديوهات' : 'Videos'}
                 </span>
               </button>
 
-              {/* 5. المكتبة / ئامبار */}
+              {/* 5. المكتبة / ئامبار matching Image 2 */}
               <button
                 id="gemini-menu-library-btn"
                 type="button"
                 onClick={() => setCurrentView('library')}
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-all cursor-pointer text-start font-medium text-sm group"
+                className="w-full flex items-center gap-3.5 px-4 py-3 rounded-full text-slate-800 dark:text-slate-200 hover:bg-[#f0f4f9] dark:hover:bg-[#1e1f20] transition-all cursor-pointer font-normal text-[15px] group"
               >
-                <div className="w-5 h-5 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <LayoutGrid className="w-5 h-5" />
+                <div className="w-5 h-5 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                  <LayoutGrid className="w-5 h-5" strokeWidth={1.8} />
                 </div>
-                <span className="flex-1 text-sm font-medium">
+                <span className="flex-1 text-start">
                   {lang === 'ug' ? 'ئامبار' : lang === 'ar' ? 'المكتبة' : 'Library'}
                 </span>
               </button>
 
-              {/* Section Header: دفاتر الملاحظات / خاتىرە دەپتەرلەر matching Image 1 */}
-              <div className="pt-6 pb-2 px-3 text-xs font-normal text-slate-400 dark:text-slate-500 flex items-center justify-between">
+              {/* Section Header: دفاتر الملاحظات / خاتىرە دەپتەرلەر matching Image 2 */}
+              <div className="pt-6 pb-1 px-4 text-[13px] font-normal text-slate-500 dark:text-slate-400 select-none">
                 <span>{lang === 'ug' ? 'خاتىرە دەپتەرلەر' : lang === 'ar' ? 'دفاتر الملاحظات' : 'Notebooks'}</span>
-                <span className="text-[10px] text-indigo-500 font-medium bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-900/50 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  {lang === 'ug' ? 'ئاپتوماتىك ساقلىنىدۇ' : 'Auto-saved'}
-                </span>
               </div>
 
-              {/* 7. + دفتر ملاحظات جديد / + يېڭى خاتىرە دەپتەر matching Image 1 */}
+              {/* 7. + دفتر ملاحظات جديد / + يېڭى خاتىرە دەپتەر matching Image 2 */}
               <button
                 id="gemini-menu-new-notebook-btn"
                 type="button"
                 onClick={() => setIsCreatingNotebook(true)}
-                className="w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-2xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 transition-all cursor-pointer text-start font-medium text-sm group"
+                className="w-full flex items-center gap-3.5 px-4 py-2.5 rounded-full hover:bg-[#f0f4f9] dark:hover:bg-[#1e1f20] text-slate-800 dark:text-slate-200 transition-all cursor-pointer font-normal text-[15px] group"
               >
-                <div className="w-5 h-5 text-slate-600 dark:text-slate-400 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <Plus className="w-5 h-5" />
+                <div className="w-5 h-5 text-slate-700 dark:text-slate-300 flex items-center justify-center shrink-0">
+                  <Plus className="w-5 h-5" strokeWidth={2} />
                 </div>
-                <span className="flex-1 text-sm font-medium">
+                <span className="flex-1 text-start">
                   {lang === 'ug' ? '+ يېڭى خاتىرە دەپتەر' : lang === 'ar' ? '+ دفتر ملاحظات جديد' : '+ New notebook'}
                 </span>
               </button>
@@ -490,11 +503,11 @@ export const GeminiSideDrawer: React.FC<GeminiSideDrawerProps> = ({
                 </form>
               )}
 
-              {/* Saved Notebooks List */}
-              <div className="space-y-1 pt-1">
+              {/* Saved Notebooks & Conversations List matching Image 2 */}
+              <div className="space-y-0.5 pt-1">
                 {notebooks.length === 0 ? (
-                  <p className="px-3 py-3 text-[11px] text-slate-400 text-center">
-                    {lang === 'ug' ? 'تېخى خاتىرە يوق، پاراڭلاشسىڭىز بۇ يەرگە ئاپتوماتىك ساقلىنىدۇ.' : 'No notes yet. Chats will auto-save here.'}
+                  <p className="px-4 py-3 text-xs text-slate-400 text-center">
+                    {lang === 'ug' ? 'تېخى خاتىرە يوق' : 'No notebooks yet'}
                   </p>
                 ) : (
                   notebooks.map((nb) => {
@@ -502,53 +515,35 @@ export const GeminiSideDrawer: React.FC<GeminiSideDrawerProps> = ({
                     return (
                       <div
                         key={nb.id}
-                        className="group flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors"
-                      >
-                        <div
-                          onClick={() => {
+                        className="group flex items-center justify-between px-4 py-2.5 rounded-full hover:bg-[#f0f4f9] dark:hover:bg-[#1e1f20] text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                        onClick={() => {
+                          if (isChat && nb.chatSessionId && onSelectSession) {
+                            onSelectSession(nb.chatSessionId);
+                            onClose();
+                          } else {
                             setSelectedNotebook(nb);
                             setCurrentView('notebook-editor');
-                          }}
-                          className="flex-1 min-w-0 cursor-pointer flex items-center gap-2.5"
-                        >
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
                           {isChat ? (
-                            <MessageSquare className="w-4 h-4 text-indigo-500 shrink-0" />
+                            <MessageSquare className="w-4 h-4 text-slate-400 dark:text-slate-500 shrink-0" strokeWidth={1.8} />
                           ) : (
-                            <FileText className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors shrink-0" />
+                            <FileText className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 transition-colors shrink-0" strokeWidth={1.8} />
                           )}
-                          <span className="text-xs font-medium truncate flex-1" title={nb.title}>
+                          <span className="text-[14px] font-normal truncate flex-1 text-slate-800 dark:text-slate-200" title={nb.title}>
                             {nb.title}
                           </span>
-                          {isChat && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 font-normal shrink-0">
-                              {lang === 'ug' ? 'پاراڭ' : 'Chat'}
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {isChat && nb.chatSessionId && onSelectSession && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (nb.chatSessionId) {
-                                  onSelectSession(nb.chatSessionId);
-                                  onClose();
-                                }
-                              }}
-                              className="p-1 rounded-md text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
-                              title={lang === 'ug' ? 'سۆھبەتنى ئېچىش' : 'Open chat'}
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDeleteNotebook(nb.id);
                             }}
-                            className="p-1 rounded-md text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                            className="p-1 rounded-full text-slate-400 hover:text-red-500 hover:bg-slate-200/60 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
                             title={lang === 'ug' ? 'ئۆچۈرۈش' : 'Delete'}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
