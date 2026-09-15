@@ -2,10 +2,55 @@ import { GeminiModelInfo } from '../types';
 
 export const GEMINI_MODELS: GeminiModelInfo[] = [
   {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    badgeUg: '100% ھەقسىز • رەسمىي نۇسخا (تەۋسىيەلىك)',
+    badgeEn: '100% Free • Official Flagship',
+    badgeTr: '%100 Ücretsiz • Resmi Ana Model',
+    badgeAr: '100% مجاني • النموذج الرسمي الأساسي',
+    descriptionUg: 'گۇگۇلنىڭ ئەڭ يېڭى رەسمىي نۇسخىسى. ئىنتايىن تېز، ئاقىل، پەن-تېخنىكا، كود يېزىش، تەرجىمە ۋە كۆپ ۋاسىتىلىك پاراڭلارغا ئەڭ مۇكەممەل.',
+    descriptionEn: "Google's official flagship fast model. Ultra-fast, highly intelligent, multimodal, and perfect for everyday tasks and coding.",
+    descriptionTr: "Google'ın resmi ana hızlı modeli. Ultra hızlı, yüksek zeka ve çok modlu yetenekler.",
+    descriptionAr: 'نموذج جوجل الرسمي فائق السرعة والذكاء، يدعم النصوص والأكواد والوسائط المتعددة.',
+    category: 'default',
+    speedLevel: 5,
+    intelligenceLevel: 5,
+    contextWindow: '1M Tokens',
+    iconName: 'Sparkles',
+    color: 'indigo',
+    isRecommended: true,
+    isFreeTier: true,
+    freeTierLimitsUg: '15 RPM • 1M TPM • كۈنىگە 1,500 قېتىم ھەقسىز',
+    freeTierLimitsEn: '15 RPM • 1M TPM • 1,500 RPD Free Quota',
+    freeTierRate: '15 RPM • 1,500 RPD',
+  },
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    badgeUg: '100% ھەقسىز • ئىلغار پىكىرلەش & چوڭ كود',
+    badgeEn: '100% Free • Deep Reasoning & Code',
+    badgeTr: '%100 Ücretsiz • Derin Muhakeme & Kod',
+    badgeAr: '100% مجاني • تفكير عميق وبرمجة متقدمة',
+    descriptionUg: 'مۇرەككەپ ماتېماتىكا، ئالگورىزىم، سىستېما لايىھىلەش ۋە چوڭ تىپتىكى پىروگرامما ئانالىزى ئۈچۈن گۇگۇلنىڭ ئەڭ كۈچلۈك Pro نۇسخىسى.',
+    descriptionEn: "Google's most capable model for complex math, algorithms, architecture design, and deep technical reasoning.",
+    descriptionTr: "Karmaşık matematik, algoritmalar ve derin teknik analiz için Google'ın en güçlü Pro modeli.",
+    descriptionAr: 'النموذج الأقوى للاستدلال المنطقي والرياضيات المعقدة وهندسة البرمجيات.',
+    category: 'pro',
+    speedLevel: 4,
+    intelligenceLevel: 5,
+    contextWindow: '2M Tokens',
+    iconName: 'Flame',
+    color: 'purple',
+    isFreeTier: true,
+    freeTierLimitsUg: 'ھەقسىز كوتا • كۈچلۈك Pro سۈنئىي ئەقىل',
+    freeTierLimitsEn: 'Free Quota • Pro Reasoning',
+    freeTierRate: 'Free Tier Available',
+  },
+  {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
-    badgeUg: '100% ھەقسىز • يېڭى & تەۋسىيەلىك',
-    badgeEn: '100% Free • Latest & Best',
+    badgeUg: 'ئاپتوماتىك 2.5 Flash • يېڭى',
+    badgeEn: 'Auto 2.5 Flash • Recommended',
     badgeTr: '%100 Ücretsiz • En Yeni',
     badgeAr: '100% مجاني • الأحدث والموصى به',
     descriptionUg: 'گۇگۇلنىڭ ئەڭ يېڭى، يۇقىرى سۈرئەتلىك ۋە ئۇنىۋېرسال ھەقسىز مودېلى. بارلىق ساھەلەردىكى كۈندىلىك پاراڭ، پەن-تېخنىكا، يېزىقچىلىق ۋە كود ئۈچۈن كۆڭۈلدىكىدەك تاللاش.',
@@ -18,7 +63,7 @@ export const GEMINI_MODELS: GeminiModelInfo[] = [
     contextWindow: '1M Tokens',
     iconName: 'Sparkles',
     color: 'indigo',
-    isRecommended: true,
+    isRecommended: false,
     isFreeTier: true,
     freeTierLimitsUg: '15 RPM • 1M TPM • كۈنىگە 1,500 قېتىم ھەقسىز',
     freeTierLimitsEn: '15 RPM • 1M TPM • 1,500 RPD Free Quota',
@@ -180,7 +225,7 @@ export const GEMINI_MODELS: GeminiModelInfo[] = [
   },
 ];
 
-export const DEFAULT_GEMINI_MODEL_ID = 'gemini-3.8-flash';
+export const DEFAULT_GEMINI_MODEL_ID = 'gemini-2.5-flash';
 
 export function getGeminiModelById(modelId?: string): GeminiModelInfo {
   if (!modelId) return GEMINI_MODELS[0];

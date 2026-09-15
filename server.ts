@@ -1,27 +1,50 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
 
+// Global crash prevention - keep server running 24/7 without dying
+process.on("uncaughtException", (err) => {
+  console.error("[CRASH PREVENTED] Uncaught exception:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[CRASH PREVENTED] Unhandled rejection:", reason);
+});
+
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json({ limit: "30mb" }));
 
-// Health check right at the beginning
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    hasApiKey: Boolean(process.env.GEMINI_API_KEY),
-    timestamp: new Date().toISOString(),
-  });
+// Cross-Origin Resource Sharing (CORS) for Mobile Apps and Cloud deployments
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
 });
 
+// Helper to safely get cleaned Gemini API Key
+function getGeminiApiKey(): string | null {
+  const envKey = process.env.GEMINI_API_KEY;
+  if (typeof envKey === "string" && envKey.trim().length > 0) {
+    const cleaned = envKey.trim().replace(/^["']|["']$/g, "");
+    if (cleaned.length > 0 && cleaned !== "MY_GEMINI_API_KEY") {
+      return cleaned;
+    }
+  }
+  return null;
+}
+
 // Lazy initialize Gemini client safely
-function getGeminiClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
+function getGeminiClient(overrideKey?: string): GoogleGenAI | null {
+  const apiKey = (overrideKey && overrideKey.trim()) || getGeminiApiKey();
   if (!apiKey) {
     return null;
   }
@@ -34,6 +57,73 @@ function getGeminiClient(): GoogleGenAI | null {
     },
   });
 }
+
+// Health check right at the beginning
+app.get("/api/health", (req, res) => {
+  const apiKey = getGeminiApiKey();
+  res.json({
+    status: "ok",
+    hasApiKey: Boolean(apiKey),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Gemini Status Endpoint
+app.get("/api/gemini/status", (req, res) => {
+  const key = getGeminiApiKey();
+  res.json({
+    status: "ok",
+    hasApiKey: Boolean(key),
+    keyMasked: key ? `${key.slice(0, 6)}...${key.slice(-4)}` : null,
+    defaultModel: "gemini-2.5-flash",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Update Gemini API key dynamically and persist to .env
+app.post("/api/gemini/key", async (req, res) => {
+  try {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      return res.status(400).json({ error: "ئاچقۇچ بوش قالسا بولمايدۇ (API Key cannot be empty)." });
+    }
+
+    const cleanKey = apiKey.trim().replace(/^["']|["']$/g, "");
+    if (cleanKey.length < 10) {
+      return res.status(400).json({ error: "ئىناۋەتلىك Gemini API ئاچقۇچى كىرگۈزۈڭ (Key is too short)." });
+    }
+
+    // Set in runtime environment
+    process.env.GEMINI_API_KEY = cleanKey;
+
+    // Persist to .env file
+    try {
+      const envPath = path.join(process.cwd(), ".env");
+      let envContent = "";
+      if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, "utf8");
+      }
+      if (/GEMINI_API_KEY=/.test(envContent)) {
+        envContent = envContent.replace(/GEMINI_API_KEY=.*/g, `GEMINI_API_KEY="${cleanKey}"`);
+      } else {
+        envContent += `\nGEMINI_API_KEY="${cleanKey}"\n`;
+      }
+      fs.writeFileSync(envPath, envContent, "utf8");
+    } catch (writeErr) {
+      console.error("Failed to write .env file:", writeErr);
+    }
+
+    res.json({
+      success: true,
+      message: "Gemini API ئاچقۇچى مۇۋەپپەقىيەتلىك تەڭشەلدى!",
+      hasApiKey: true,
+      keyMasked: `${cleanKey.slice(0, 6)}...${cleanKey.slice(-4)}`,
+    });
+  } catch (err: any) {
+    console.error("Error setting API key:", err);
+    res.status(500).json({ error: err.message || "Failed to save API key" });
+  }
+});
 
 // Helper to convert raw PCM (16-bit little-endian) to standard WAV with RIFF header
 function pcmToWav(pcmBase64: string, sampleRate = 24000, numChannels = 1): string {
@@ -158,6 +248,33 @@ function formatGeminiMessages(messages: InputMessage[]): { role: string; parts: 
   return formatted;
 }
 
+// Helper to map UI alias or custom model IDs to actual Google Gemini API models
+function mapToActualGeminiModel(modelName?: string): string {
+  if (!modelName) return "gemini-3.8-flash";
+  const m = modelName.trim().toLowerCase();
+
+  // If 2.5 or older is requested, API specifically directs to 3.6-flash
+  if (m.includes("2.5") || m.includes("2.0") || m.includes("1.5")) {
+    return "gemini-3.6-flash";
+  }
+  if (m.includes("3.8")) {
+    return "gemini-3.8-flash";
+  }
+  if (m.includes("3.7")) {
+    return "gemini-3.7-flash";
+  }
+  if (m.includes("3.6")) {
+    return "gemini-3.6-flash";
+  }
+  if (m.includes("lite")) {
+    return "gemini-3.1-flash-lite";
+  }
+  if (m.includes("pro")) {
+    return "gemini-3.1-pro-preview";
+  }
+  return modelName.trim();
+}
+
 // Resilient Multi-Model Gemini Generator with automated fallback
 async function generateWithGeminiFallback(
   ai: GoogleGenAI,
@@ -167,42 +284,30 @@ async function generateWithGeminiFallback(
     preferredModel?: string;
   }
 ): Promise<{ text: string; model: string }> {
-  // Normalize deprecated or outdated model names
-  let preferred = options.preferredModel || "gemini-3.8-flash";
-  if (
-    preferred.includes("2.5-") ||
-    preferred.includes("2.0-") ||
-    preferred.includes("1.5-") ||
-    preferred.includes("gemini-pro") ||
-    preferred === "gemini-3.6-flash"
-  ) {
-    preferred = "gemini-3.8-flash";
-  }
+  const actualPreferred = mapToActualGeminiModel(options.preferredModel);
 
-  // Prioritize active, supported production models with high availability
+  // Candidate fallback sequence of active, supported Google Gemini production models
   const candidateModels = [
-    preferred,
+    actualPreferred,
+    "gemini-3.6-flash",
+    "gemini-flash-latest",
+    options.preferredModel,
     "gemini-3.8-flash",
     "gemini-3.7-flash",
-    "gemini-flash-latest",
     "gemini-3.1-flash-lite",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite-image",
-    "gemini-3.1-flash-image",
-    "gemini-3.5-transcribe",
-  ].filter((m, idx, arr) => arr.indexOf(m) === idx);
+  ].filter(Boolean).filter((m, idx, arr) => arr.indexOf(m) === idx);
 
   let lastError: any = null;
   for (const model of candidateModels) {
     try {
       const response = await ai.models.generateContent({
-        model,
+        model: model as string,
         contents: options.contents,
         config: options.config,
       });
 
       if (response && response.text) {
-        return { text: response.text, model };
+        return { text: response.text, model: model as string };
       }
     } catch (err: any) {
       lastError = err;
@@ -218,14 +323,12 @@ async function generateWithGeminiFallback(
 app.get("/api/gemini/models", (req, res) => {
   res.json({
     activeModels: [
-      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", category: "default", isRecommended: true, isFreeTier: true },
-      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash Medium", category: "reasoning", isFreeTier: true },
-      { id: "gemini-flash-latest", name: "Gemini Flash Latest", category: "fast", isFreeTier: true },
-      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite", category: "lite", isFreeTier: true },
-      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", category: "pro", isFreeTier: true },
-      { id: "gemini-3.1-flash-lite-image", name: "Gemini 3.1 Flash Lite Image", category: "vision", isFreeTier: true },
-      { id: "gemini-3.1-flash-image", name: "Gemini 3.1 Flash Image", category: "vision", isFreeTier: true },
-      { id: "gemini-3.5-transcribe", name: "Gemini 3.5 Transcribe", category: "audio", isFreeTier: true },
+      { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (ئاساسىي تېز & يېڭى)", category: "default", isRecommended: true, isFreeTier: true },
+      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash Reasoning (ئىلغار تەپەككۇر)", category: "reasoning", isFreeTier: true },
+      { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash (تۇراقلىق رەسمىي نۇسخا)", category: "fast", isFreeTier: true },
+      { id: "gemini-flash-latest", name: "Gemini Flash Latest (ئەڭ تېز سۈرئەت)", category: "fast", isFreeTier: true },
+      { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite (يەڭگىل & يۇقىرى چەك)", category: "lite", isFreeTier: true },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview (Pro تەتقىقات)", category: "pro", isFreeTier: true },
     ],
     defaultModel: "gemini-3.8-flash",
   });
@@ -268,67 +371,92 @@ Craft engaging, eloquent, poetic, and refined texts with high literary quality i
 Help organize priorities, design actionable schedules, optimize habits, and overcome procrastination with empathetic and realistic strategies.`;
     }
 
+    const apiKey = getGeminiApiKey();
     const ai = getGeminiClient();
     const formattedContents = formatGeminiMessages(messages);
 
-    if (ai) {
-      try {
-        const result = await generateWithGeminiFallback(ai, {
-          preferredModel: model || "gemini-3.8-flash",
-          contents: formattedContents,
-          config: {
-            systemInstruction: systemInstruction || personaPrompt,
-            temperature: 0.7,
-          },
-        });
+    if (!apiKey || !ai) {
+      const isUg = /[\u0600-\u06FF]/.test(messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.content || '');
+      const missingKeyWarning = isUg
+        ? `### ⚠️ Google Gemini API ئاچقۇچى ئۇلانمىغان!
 
-        if (result.text) {
-          return res.json({ reply: result.text, modelUsed: result.model });
-        }
-      } catch (geminiError: any) {
-        console.error("All Gemini API calls failed in /api/chat:", geminiError);
-      }
+ھازىر سىستېمىغا **Gemini API Key** كىرگۈزۈلمىگەنلىكتىن، ھەقىقىي سۈنئىي ئىدراك مودېلىغا ئۇلىنالمايۋاتىدۇ.
+
+**تۆۋەندىكى ئۇسۇللارنىڭ بىرى بىلەن ئاچقۇچنى كىرگۈزۈڭ:**
+1. **تور يۈزىدىن كىرگۈزۈش (ئەڭ ئاسان):**
+   - يۇقىرىدىكى **مودېل تاللاش** كۆزنىكىنى ئېچىپ، گۇگۇل AI Studio دىن ئالغان ھەقسىز API ئاچقۇچىڭىزنى بىۋاسىتە چاپلاپ ساقلاڭ.
+2. **\`.env\` ھۆججىتىگە كىرگۈزۈش:**
+   - تۈر ئاساسىي مۇندەرىجىسىدىكى \`.env\` ھۆججىتىنى ئېچىپ، تۆۋەندىكىدەك تولدۇرۇڭ:
+   \`\`\`env
+   GEMINI_API_KEY="سىزنىڭ_AIzaSy_ئاچقۇچىڭىز"
+   \`\`\`
+
+🔗 **ھەقسىز API ئاچقۇچ ئېلىش مەنزىلى:** [Google AI Studio Get API Key](https://aistudio.google.com/app/apikey)
+*(كۈنىگە 1,500 قېتىم ھەقسىز تەلەپ كوتىسى بېرىلىدۇ)*`
+        : `### ⚠️ Google Gemini API Key Not Configured!
+
+The system is currently running without a **GEMINI_API_KEY**, so it cannot connect to the real AI engine.
+
+**How to connect:**
+1. **Via Web Interface:**
+   - Click the model selector in the header and paste your Google AI Studio API key.
+2. **Via \`.env\` file:**
+   - Open the \`.env\` file in the project root directory and set:
+   \`\`\`env
+   GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+   \`\`\`
+
+🔗 **Get a Free API Key:** [Google AI Studio](https://aistudio.google.com/app/apikey)`;
+
+      return res.json({
+        reply: missingKeyWarning,
+        modelUsed: "gemini-not-configured",
+      });
     }
 
-    // Dynamic contextual assistant answer if API is completely unreachable
+    let geminiApiError: any = null;
+    try {
+      const result = await generateWithGeminiFallback(ai, {
+        preferredModel: model || "gemini-3.8-flash",
+        contents: formattedContents,
+        config: {
+          systemInstruction: systemInstruction || personaPrompt,
+          temperature: 0.7,
+        },
+      });
+
+      if (result.text) {
+        return res.json({ reply: result.text, modelUsed: result.model });
+      }
+    } catch (geminiError: any) {
+      geminiApiError = geminiError;
+      console.error("All Gemini API calls failed in /api/chat:", geminiError);
+    }
+
+    // Dynamic contextual assistant answer if API has an error
     const lastUserMsg = messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.content || '';
     const isUyghur = /[\u0600-\u06FF]/.test(lastUserMsg);
+    const errDetail = geminiApiError?.message || String(geminiApiError || "نامەلۇم كاشىلا");
 
-    let smartFallbackReply = "";
-    if (isUyghur) {
-      smartFallbackReply = `### 🌟 ئەقلىي ياردەمچى (Gemini / ChatGPT سەۋىيىسىدىكى ئومۇمىي سۈنئىي ئىدراك)
+    const errorNotification = isUyghur
+      ? `### ⚠️ Gemini API چاقىرىشتا خاتالىق كۆرۈلدى
 
-ئەسسالامۇ ئەلەيكۇم! سىزنىڭ تېمىڭىز: **"${lastUserMsg || 'ئومۇمىي پاراڭ'}"**
+Google Gemini API مۇلازىمېتىرىغا ئۇلىنىشتا كاشىلا كۆرۈلدى.
+**خاتالىق تەپسىلاتى:** \`${errDetail}\`
 
-مەن سىز بىلەن بارلىق ساھەلەردە ئەركىن ۋە چوڭقۇر پاراڭلىشالايدىغان ئۇنىۋېرسال ئەقلىي ياردەمچىمەن. مېنىڭدىن تۆۋەندىكىدەك ھەرقانداق ساھەدە پايدىلانالايسىز:
+**ھەل قىلىش تەۋسىيەلىرى:**
+1. API ئاچقۇچىڭىزنىڭ توغرىلىقىنى ۋە ھەقسىز كوتا چەكلىمىسىنى تەكشۈرۈڭ.
+2. گۇگۇل سۈنئىي ئىدراك كۆزنىكىدىن باشقا مودېلنى (\`gemini-2.5-flash\` ياكى \`gemini-2.0-flash\`) تاللاپ سىناڭ.`
+      : `### ⚠️ Gemini API Call Failed
 
-1. **📚 بىلىم، پەن-تېخنىكا ۋە كۈندىلىك سوئاللار:** 
-   - تارىخ، پەلسەپە، جۇغراپىيە، فىزىكا، تېبابەت ۋە كائىناتقا ئائىت ھەرقانداق سوئالغا جاۋاب تېپىش.
-2. **💻 پىروگرامما ۋە كود يېزىش (Coding & Dev):** 
-   - Python, JavaScript, TypeScript, React, C++, سۈنئىي ئىدراك ۋە سانلىق مەلۇمات ئامبىرى كودلىرىنى يېزىش ۋە خاتالىق تۈزىتىش.
-3. **✍️ يېزىقچىلىق ۋە تەرجىمە:** 
-   - ماقالە، ھېكايە، شېئىر يېزىش؛ ئۇيغۇرچە، تۈركچە، ئەرەبچە، ئىنگلىزچە ۋە خەنزۇچە ئارىسىدا يۇقىرى سۈپەتلىك تەرجىمە قىلىش.
-4. **💡 تۈر پىلانلاش ۋە تەپەككۇر خەرىتىسى:** 
-   - شەخسىي تۈرلەرنىڭ سىستېما قۇرۇلمىسىنى لايىھىلەش، ۋەزىپىلەرگە پارچىلاش.
-5. **🎯 كۈندىلىك تۇرمۇش ۋە نىشان مەسلىھەتچىلىكى:** 
-   - ئۆگىنىش پىلانى تۈزۈش، ئادەت يېتىلدۈرۈش ۋە ۋاقىت باشقۇرۇش.
+Could not complete request with Google Gemini API.
+**Error Details:** \`${errDetail}\`
 
-خالىغان سۇئالىڭىزنى ياكى پىكرىڭىزنى بىۋاسىتە يېزىڭ، بىرلىكتە مۇزاكىرە قىلايلى!`;
-    } else {
-      smartFallbackReply = `### 🌟 Universal AI Assistant
+**Troubleshooting:**
+1. Verify that your API key is valid and has remaining free quota.
+2. Select another model like \`gemini-2.5-flash\` or \`gemini-2.0-flash\`.`;
 
-Hello! Regarding your inquiry: **"${lastUserMsg || 'General Query'}"**
-
-I am your universal conversational AI assistant (operating with multi-domain capabilities like ChatGPT & Gemini). You can consult me on:
-- **STEM & Humanities**: Science, History, Philosophy, Mathematics, Physics, and Geography.
-- **Software Engineering**: Full-stack web development, Python, TypeScript, React, algorithms, and debugging.
-- **Content Creation & Translation**: Essays, copywriting, creative writing, and multilingual translation.
-- **Productivity & Planning**: Project blueprints, time blocking, and actionable habit systems.
-
-Feel free to ask any specific question, code request, or conversation topic!`;
-    }
-
-    return res.json({ reply: smartFallbackReply });
+    return res.json({ reply: errorNotification, modelUsed: "gemini-error" });
   } catch (error: any) {
     console.error("Error in /api/chat handler:", error);
     return res.json({
@@ -928,7 +1056,7 @@ app.post("/api/process-voice-memo", async (req, res) => {
           },
         };
         const transcribeRes = await ai.models.generateContent({
-          model: "gemini-3.5-transcribe",
+          model: "gemini-2.5-flash",
           contents: { parts: [audioPart, { text: `Transcribe this audio accurately. If spoken in Uyghur, transcribe in Uyghur script. Output the raw text.` }] },
         });
         transcriptionText = transcribeRes.text || "";
@@ -1023,7 +1151,7 @@ Do not include any commentary, explanations, quotes, or timestamps.
 If the audio is silent or unintelligible, return an empty string.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
+      model: "gemini-2.5-flash",
       contents: [
         {
           inlineData: {
@@ -1081,18 +1209,34 @@ app.post("/api/text-to-speech", async (req, res) => {
 
     const selectedVoice = voice || "Kore"; // 'Kore' is warm, clear and expressive
 
-    const ttsResponse = await ai.models.generateContent({
-      model: "gemini-3.1-flash-tts-preview",
-      contents: [{ parts: [{ text: cleanText }] }],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: selectedVoice },
+    const ttsCandidateModels = [
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-exp",
+    ];
+
+    let ttsResponse: any = null;
+    for (const m of ttsCandidateModels) {
+      try {
+        ttsResponse = await ai.models.generateContent({
+          model: m,
+          contents: [{ parts: [{ text: cleanText }] }],
+          config: {
+            responseModalities: ["AUDIO"],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: selectedVoice },
+              },
+            },
           },
-        },
-      },
-    });
+        });
+        if (ttsResponse?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data) {
+          break;
+        }
+      } catch (ttsErr: any) {
+        console.warn(`[TTS] Model "${m}" failed: ${ttsErr?.message || ttsErr}`);
+      }
+    }
 
     const rawPcmData = ttsResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
     if (!rawPcmData) {
@@ -1990,7 +2134,8 @@ Return ONLY a valid JSON object:
 // Vite middleware in dev or static serving in production
 async function setupViteOrStatic() {
   try {
-    if (process.env.NODE_ENV !== "production") {
+    const isProduction = process.env.NODE_ENV === "production" || Boolean(process.argv[1] && process.argv[1].includes("server.cjs"));
+    if (!isProduction) {
       const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },

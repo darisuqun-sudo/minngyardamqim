@@ -71,6 +71,8 @@ import { DocExporterView } from './components/DocExporterView';
 import { WebReaderView } from './components/WebReaderView';
 import { OKRGoalsView } from './components/OKRGoalsView';
 import { MorningBriefingModal } from './components/MorningBriefingModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { PWAInstallModal } from './components/PWAInstallModal';
 import { Footer } from './components/Footer';
 
 export default function App() {
@@ -90,6 +92,17 @@ export default function App() {
   const [selectedPillarId, setSelectedPillarId] = useState<string>('frontend-ui');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+  const [isPWAInstallModalOpen, setIsPWAInstallModalOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
 
   // Chat Sessions and active session state
   const DEFAULT_INITIAL_WELCOME: ChatMessage = {
@@ -840,17 +853,41 @@ export default function App() {
         : [...messages, userMsg]
       ).slice(-8);
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: historyContext,
-          persona: personaId,
-          model: chosenModel,
-        }),
-      });
+      // Resilient fetch with automatic retry
+      let res: Response | null = null;
+      let lastFetchErr: any = null;
 
-      const data = await res.json();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: historyContext,
+              persona: personaId,
+              model: chosenModel,
+            }),
+          });
+          if (res.ok) break;
+        } catch (fetchErr) {
+          lastFetchErr = fetchErr;
+          if (attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 800));
+          }
+        }
+      }
+
+      if (!res) {
+        throw lastFetchErr || new Error('Failed to fetch from backend server');
+      }
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+
       const replyContent = data.reply || data.fallback || 'جاۋاب ئېلىشتا خاتالىق كۆرۈلدى.';
       const modelUsed = data.modelUsed || chosenModel;
 
@@ -875,19 +912,38 @@ export default function App() {
       );
 
       return replyContent;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Chat error:', error);
+      const isConnectionErr =
+        error?.message?.includes('Failed to fetch') ||
+        error?.message?.includes('NetworkError') ||
+        error?.message?.includes('network') ||
+        error?.message?.includes('connect') ||
+        !navigator.onLine;
+
+      const offlineContent =
+        lang === 'ug'
+          ? `### ⚠️ مۇلازىمېتىر (Backend Server) ئۇلانمىدى!
+
+كومپيۇتېرىڭىز قايتا قوزغالغانلىقتىن، تۈرنىڭ ئارقا مۇلازىمېتىرى (\`http://localhost:3000\`) تېخى قوزغالمىغان ياكى توختاپ قالغان.
+
+**ئەڭ ئاسان ھەل قىلىش چارىسى:**
+1. ئۈستەل يۈزىدىكى (Desktop) **«🚀 بېكەتنى قوزغىتىش (مىڭ ياردەمچىم)»** سىنبەلگىسىنى قوش چېكىپ قوزغىتىڭ.
+2. ياكى تۈر قىسقۇچىدا تۇرۇپ قايتا قوزغىتىڭ.
+3. مۇلازىمېتىر قوزغالغاندىن كېيىن، سوئالىڭىزنى قايتا ئەۋەتسىڭىزلا دەرھال نۇرمال ئىشلەيدۇ!`
+          : `### ⚠️ Backend Server Not Reachable!
+
+The local server at \`http://localhost:3000\` is offline or stopped.
+Please double-click the **"Start Server"** launcher on your Desktop to resume service.`;
+
       const errorMsg: ChatMessage = {
         id: `msg-err-${Date.now()}`,
         role: 'model',
-        content:
-          lang === 'ug'
+        content: isConnectionErr
+          ? offlineContent
+          : (lang === 'ug'
             ? 'كەچۈرۈڭ، مۇلازىمېتىردىن جاۋاب ئېلىشتا خاتالىق يۈز بەردى. قايتا سىناپ بېقىڭ.'
-            : lang === 'tr'
-            ? 'Üzgünüz, sunucudan yanıt alınırken hata oluştu. Lütfen tekrar deneyin.'
-            : lang === 'ar'
-            ? 'عذراً، حدث خطأ أثناء الاتصال بالخادم. يرجى المحاولة مرة أخرى.'
-            : 'Sorry, failed to fetch AI response. Please try again.',
+            : 'Sorry, failed to fetch AI response. Please try again.'),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -1248,7 +1304,7 @@ export default function App() {
       />
 
       {/* Main Content Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 xl:pb-8">
         {activeTab === 'dashboard' && (
           <OverviewDashboard
             lang={lang}
@@ -1555,6 +1611,27 @@ export default function App() {
         lang={lang}
         setActiveTab={setActiveTab}
         onResetAllData={handleResetDefaults}
+      />
+
+      {/* Docked Mobile Bottom Navigation Bar (Smartphones & Small Tablets) */}
+      <MobileBottomNav
+        lang={lang}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
+        themeMode={themeMode}
+        setThemeMode={setThemeMode}
+        setLang={setLang}
+        deferredInstallPrompt={deferredInstallPrompt}
+        onInstallPWA={() => setIsPWAInstallModalOpen(true)}
+      />
+
+      {/* PWA Phone Install Modal */}
+      <PWAInstallModal
+        isOpen={isPWAInstallModalOpen}
+        onClose={() => setIsPWAInstallModalOpen(false)}
+        deferredPrompt={deferredInstallPrompt}
+        lang={lang}
       />
     </div>
   );

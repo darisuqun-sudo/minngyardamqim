@@ -1,7 +1,7 @@
-{
-  "short_name": "SmartAssistant",
-  "name": "Smart AI Assistant & Productivity Hub",
-  "description": "ئەقلىي ياردەمچى ۋە ئۇنىۋېرسال ئىشلەپچىقىرىش مەركىزى",
+﻿{
+  "short_name": "مىڭ ياردەمچىم",
+  "name": "مىڭ ياردەمچىم - ئەقلىي سۈنئىي ئىدراك ۋە ئۇنىۋېرسال ئىشخانا",
+  "description": "كۆپ ئىقتىدارلىق سۈنئىي ئىدراك ياردەمچىسى، كالېندار، كود، بىلىم ئامبىرى ۋە ئىشلەپچىقىرىش مەركىزى",
   "icons": [
     {
       "src": "/icon.svg",
@@ -11,10 +11,13 @@
     }
   ],
   "start_url": "/",
+  "id": "/",
+  "scope": "/",
   "background_color": "#0f172a",
   "theme_color": "#4f46e5",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "lang": "ug",
-  "dir": "rtl"
+  "dir": "rtl",
+  "categories": ["productivity", "utilities", "business", "education"]
 }

@@ -1,0 +1,6 @@
+@echo off
+chcp 65001 >nul
+title ??? ????????? - ????? ????????
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0stop-server.ps1"
+timeout /t 2 /nobreak >nul
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0launcher.ps1"

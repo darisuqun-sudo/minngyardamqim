@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Sparkles,
   Zap,
@@ -17,6 +17,11 @@ import {
   Mic,
   Eye,
   ShieldCheck,
+  Key,
+  ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { GEMINI_MODELS } from '../data/geminiModels';
 import { AppLanguage, GeminiModelInfo } from '../types';
@@ -38,6 +43,65 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'all' | 'free' | 'text' | 'multimodal'>('all');
+
+  // Gemini API Key Management State
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [keyMasked, setKeyMasked] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isSavingKey, setIsSavingKey] = useState(false);
+  const [keyMessage, setKeyMessage] = useState('');
+  const [isKeyError, setIsKeyError] = useState(false);
+  const [showKeyInput, setShowKeyInput] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/gemini/status')
+        .then((res) => res.json())
+        .then((data) => {
+          setHasApiKey(Boolean(data.hasApiKey));
+          setKeyMasked(data.keyMasked || '');
+          if (!data.hasApiKey) {
+            setShowKeyInput(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen]);
+
+  const handleSaveApiKey = async () => {
+    if (!apiKeyInput.trim()) return;
+    setIsSavingKey(true);
+    setKeyMessage('');
+    try {
+      const res = await fetch('/api/gemini/key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: apiKeyInput.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.hasApiKey) {
+        setHasApiKey(true);
+        setKeyMasked(data.keyMasked || '');
+        setKeyMessage(
+          lang === 'ug'
+            ? '✅ ئاچقۇچ مۇۋەپپەقىيەتلىك ساقلاندى! ھەقىقىي سۈنئىي ئىدراكقا ئۇلاندى.'
+            : '✅ API key successfully saved and connected!'
+        );
+        setIsKeyError(false);
+        setApiKeyInput('');
+      } else {
+        setIsKeyError(true);
+        setKeyMessage(
+          data.error || (lang === 'ug' ? '❌ ئاچقۇچنى ساقلاش مەغلۇپ بولدى.' : 'Failed to save key.')
+        );
+      }
+    } catch (e: any) {
+      setIsKeyError(true);
+      setKeyMessage(e.message || 'Network error');
+    } finally {
+      setIsSavingKey(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -163,6 +227,95 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* API Key Status & Configuration Card */}
+        <div className="px-4 py-3 bg-gradient-to-r from-indigo-50/80 to-purple-50/80 dark:from-indigo-950/40 dark:to-purple-950/40 border-b border-indigo-100 dark:border-indigo-900/50 shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <div className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400">
+                <Key className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {lang === 'ug' ? 'Gemini API ئاچقۇچى (API Key):' : 'Gemini API Key:'}
+                  </span>
+                  {hasApiKey ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 className="w-3 h-3" />
+                      {lang === 'ug' ? `ئۇلانغان (${keyMasked})` : `Connected (${keyMasked})`}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300">
+                      <AlertCircle className="w-3 h-3" />
+                      {lang === 'ug' ? 'ئۇلانمىغان (تەييار قېلىپ ھالىتىدە)' : 'Not Set (Mock mode)'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowKeyInput(!showKeyInput)}
+              className="text-xs text-indigo-600 dark:text-indigo-400 font-medium hover:underline cursor-pointer"
+            >
+              {showKeyInput
+                ? (lang === 'ug' ? 'يوشۇرۇش' : 'Hide')
+                : (hasApiKey
+                  ? (lang === 'ug' ? 'ئاچقۇچنى يېڭىلاش' : 'Change Key')
+                  : (lang === 'ug' ? 'ئاچقۇچ كىرگۈزۈش' : 'Enter Key'))}
+            </button>
+          </div>
+
+          {showKeyInput && (
+            <div className="mt-2.5 pt-2.5 border-t border-indigo-100/80 dark:border-indigo-900/40 space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  placeholder={lang === 'ug' ? 'AIzaSy... بىلەن باشلانغان Gemini API ئاچقۇچىڭىزنى چاپلاڭ' : 'Paste Gemini API Key (AIzaSy...)'}
+                  className="flex-1 px-3 py-1.5 text-xs rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-indigo-200 dark:border-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-mono"
+                />
+                <button
+                  type="button"
+                  disabled={isSavingKey || !apiKeyInput.trim()}
+                  onClick={handleSaveApiKey}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-medium text-xs transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  {isSavingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  <span>{lang === 'ug' ? 'ساقلاش' : 'Save'}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                <span>{lang === 'ug' ? 'ئەسكەرتىش: ئاچقۇچ بىۋاسىتە .env ھۆججىتىگە ساقلىنىدۇ' : 'Key will be saved to .env file'}</span>
+                <a
+                  href="https://aistudio.google.com/app/apikey"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline flex items-center gap-0.5"
+                >
+                  <span>{lang === 'ug' ? 'ھەقسىز ئاچقۇچ ئېلىش' : 'Get Free Key'}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+
+              {keyMessage && (
+                <div
+                  className={`text-xs px-2.5 py-1.5 rounded-lg ${
+                    isKeyError
+                      ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900'
+                      : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900'
+                  }`}
+                >
+                  {keyMessage}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Search & Tabs Controls */}
