@@ -465,3 +465,37 @@ export interface ExportDocConfig {
   theme: 'clean' | 'modern' | 'minimal';
 }
 
+// 17. GitHub Integration Types
+export interface GitHubUser {
+  login: string;
+  id: number;
+  avatar_url: string;
+  name: string | null;
+  html_url: string;
+  public_repos: number;
+  bio?: string | null;
+}
+
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  html_url: string;
+  description: string | null;
+  default_branch: string;
+  updated_at?: string;
+}
+
+export interface GitHubPushPayload {
+  token?: string;
+  owner: string;
+  repo: string;
+  path: string;
+  content: string;
+  message: string;
+  branch?: string;
+  sha?: string;
+}
+
+

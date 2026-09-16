@@ -15,16 +15,15 @@ import {
   Eye,
   FileText,
   Terminal,
-  Sparkles,
   ExternalLink,
-  ChevronRight,
   X,
-  Layers,
-  Settings,
-  Cpu,
+  Github,
+  RotateCcw,
+  Sparkles,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { AppLanguage } from '../types';
+import { GitHubExportModal } from './GitHubExportModal';
 
 export interface CanvasDocument {
   id: string;
@@ -53,11 +52,13 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<CanvasTab>('preview');
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
+  const [isLandscape, setIsLandscape] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [executionOutput, setExecutionOutput] = useState<string | null>(null);
+  const [isGitHubModalOpen, setIsGitHubModalOpen] = useState<boolean>(false);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isRTL = lang === 'ug' || lang === 'ar';
@@ -127,7 +128,6 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
 <body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
   <div id="root"></div>
   <script type="text/babel">
-    // Capture errors and logs
     window.onerror = function(msg, url, line) {
       window.parent.postMessage({ type: 'CONSOLE_LOG', log: '❌ Error: ' + msg + ' (Line ' + line + ')' }, '*');
     };
@@ -139,14 +139,15 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
 
     try {
       ${code}
-
-      // Automatically render App or default component if exists
-      const targetComponent = typeof App !== 'undefined' ? App : (typeof Component !== 'undefined' ? Component : null);
-      if (targetComponent) {
-        ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(targetComponent));
+      if (typeof App !== 'undefined') {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+      } else if (typeof Component !== 'undefined') {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Component />);
       }
     } catch(err) {
-      document.getElementById('root').innerHTML = '<div class="p-4 rounded-xl bg-red-100 text-red-700 font-mono text-xs">Runtime Error: ' + err.message + '</div>';
+      document.getElementById('root').innerHTML = '<div style="color:red;padding:1rem;font-family:monospace;"><b>Runtime Error:</b> ' + err.message + '</div>';
       console.error(err);
     }
   </script>
@@ -155,7 +156,6 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
     }
 
     if (['html', 'htm', 'svg'].includes(language.toLowerCase())) {
-      // If code doesn't contain standard html wrapper, wrap it
       if (!code.includes('<html') && !code.includes('<!DOCTYPE')) {
         return `<!DOCTYPE html>
 <html>
@@ -194,7 +194,6 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   };
 
-  // Reload the sandbox iframe
   const reloadSandbox = () => {
     if (iframeRef.current) {
       setLogs([]);
@@ -207,7 +206,6 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
     reloadSandbox();
   }, [doc.code, doc.language]);
 
-  // Listen to message logs from iframe
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (e.data && e.data.type === 'CONSOLE_LOG') {
@@ -221,7 +219,6 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Run Simulation for Python / Code
   const handleExecuteCode = () => {
     setIsExecuting(true);
     setExecutionOutput(null);
@@ -254,7 +251,6 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
           setExecutionOutput('❌ JSON Syntax Error:\n' + err.message);
         }
       } else {
-        // Python / SQL / Script Simulation
         setExecutionOutput(`[Running simulated ${doc.language.toUpperCase()} engine...]\n\n🚀 Process initialized.\n==============================\n${
           doc.code.includes('print')
             ? doc.code.split('\n').filter(line => line.trim().startsWith('print')).map(line => line.replace(/print\(["']?(.*?)["']?\)/, '$1')).join('\n')
@@ -265,14 +261,12 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
     }, 400);
   };
 
-  // Copy Code
   const handleCopy = () => {
     navigator.clipboard.writeText(doc.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Download Code / Document
   const handleDownload = () => {
     let extension = '.txt';
     const l = doc.language.toLowerCase();
@@ -296,64 +290,19 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  // Print Document or Code
-  const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-
-    if (detectedType === 'markdown') {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>${doc.title}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 2rem; max-width: 800px; margin: 0 auto; line-height: 1.6; }
-            h1, h2, h3 { color: #1e293b; }
-            pre { background: #f1f5f9; padding: 1rem; border-radius: 8px; overflow-x: auto; }
-            blockquote { border-left: 4px solid #6366f1; padding-left: 1rem; color: #475569; }
-          </style>
-        </head>
-        <body>
-          <h1>${doc.title}</h1>
-          <hr/>
-          <div>${doc.code.replace(/\n/g, '<br/>')}</div>
-        </body>
-        </html>
-      `);
-    } else {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>${doc.title}</title>
-          <style>
-            body { font-family: monospace; padding: 2rem; font-size: 13px; line-height: 1.5; }
-            pre { white-space: pre-wrap; }
-          </style>
-        </head>
-        <body>
-          <h2>${doc.title} (${doc.language.toUpperCase()})</h2>
-          <hr/>
-          <pre>${escapeHtml(doc.code)}</pre>
-        </body>
-        </html>
-      `);
+  // Dimensions for device viewport frames
+  const getDeviceContainerStyle = () => {
+    if (deviceMode === 'mobile') {
+      return isLandscape
+        ? { width: '680px', height: '380px', maxWidth: '100%' }
+        : { width: '380px', height: '100%', maxHeight: '720px', maxWidth: '100%' };
     }
-
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 300);
-  };
-
-  // Width for device toggle
-  const getDeviceWidth = () => {
-    if (deviceMode === 'mobile') return 'max-w-[375px]';
-    if (deviceMode === 'tablet') return 'max-w-[768px]';
-    return 'w-full';
+    if (deviceMode === 'tablet') {
+      return isLandscape
+        ? { width: '900px', height: '100%', maxHeight: '620px', maxWidth: '100%' }
+        : { width: '768px', height: '100%', maxHeight: '760px', maxWidth: '100%' };
+    }
+    return { width: '100%', height: '100%' };
   };
 
   return (
@@ -361,132 +310,165 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
       id="live-canvas-sandbox-root"
       className={`flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden transition-all ${
         isFullscreen
-          ? 'fixed inset-4 z-50 shadow-2xl h-[calc(100vh-2rem)]'
-          : 'h-[620px] w-full'
+          ? 'fixed inset-2 sm:inset-4 z-50 shadow-2xl h-[calc(100vh-1rem)] sm:h-[calc(100vh-2rem)]'
+          : 'h-full min-h-[620px] w-full'
       }`}
     >
-      {/* Top Header Bar */}
-      <div className="p-3 sm:px-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
-        {/* Document Title & Badge */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs flex-shrink-0">
-            {detectedType === 'web' ? (
-              <Eye className="w-4 h-4" />
-            ) : detectedType === 'markdown' ? (
-              <FileText className="w-4 h-4" />
-            ) : (
-              <Code2 className="w-4 h-4" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-              {doc.title}
-            </h4>
-            <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
-              <span className="font-mono uppercase font-bold text-indigo-600 dark:text-indigo-400">
-                {doc.language}
-              </span>
-              <span>•</span>
-              <span>{doc.updatedAt}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* View Mode Selector (Preview / Code / Console) */}
-        <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-950 p-1 rounded-xl">
-          <button
-            onClick={() => setActiveTab('preview')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'preview'
-                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span>{lang === 'ug' ? 'نەتىجە' : 'Preview'}</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('code')}
-            className={`px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              activeTab === 'code'
-                ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Code2 className="w-3.5 h-3.5" />
-            <span>{lang === 'ug' ? 'كود' : 'Code'}</span>
-          </button>
-
-          {detectedType === 'web' && (
+      {/* Top Header Bar - Google AI Studio Style */}
+      <div className="px-3 sm:px-4 py-2 bg-slate-50/95 dark:bg-slate-800/95 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap select-none">
+        {/* Left Side: View Mode Tabs (Preview / Code / Console) */}
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center bg-slate-200/80 dark:bg-slate-950 p-1 rounded-xl border border-slate-300/40 dark:border-slate-800">
             <button
-              onClick={() => setActiveTab('console')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer relative ${
-                activeTab === 'console'
+              type="button"
+              onClick={() => setActiveTab('preview')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'preview'
                   ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
-              <Terminal className="w-3.5 h-3.5" />
-              <span>{lang === 'ug' ? 'كۆزەتكۈچ' : 'Console'}</span>
-              {logs.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              )}
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{lang === 'ug' ? 'كۆرۈش (Preview)' : 'Preview'}</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('code')}
+              className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                activeTab === 'code'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Code2 className="w-3.5 h-3.5" />
+              <span>{lang === 'ug' ? 'كود (Code)' : 'Code'}</span>
+            </button>
+
+            {detectedType === 'web' && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('console')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer relative ${
+                  activeTab === 'console'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>Console</span>
+                {logs.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Action Controls (Responsive devices, Copy, Print, Download, Fullscreen) */}
-        <div className="flex items-center gap-1">
-          {detectedType === 'web' && activeTab === 'preview' && (
-            <div className="hidden sm:flex items-center gap-0.5 bg-slate-200/70 dark:bg-slate-950 p-1 rounded-xl mr-1">
+        {/* Center: Device Viewport Bar & Address (Google AI Studio Bar) */}
+        {detectedType === 'web' && activeTab === 'preview' && (
+          <div className="flex items-center gap-1.5 bg-slate-200/80 dark:bg-slate-950 px-2 py-1 rounded-xl border border-slate-300/40 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-300">
+            {/* Viewport switch: Desktop, Tablet, Mobile */}
+            <div className="flex items-center gap-0.5">
               <button
+                type="button"
                 onClick={() => setDeviceMode('desktop')}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                   deviceMode === 'desktop'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title="Desktop"
+                title={lang === 'ug' ? 'كومپيۇتېر نۇسخىسى (Desktop)' : 'Desktop View'}
               >
                 <Monitor className="w-3.5 h-3.5" />
               </button>
               <button
+                type="button"
                 onClick={() => setDeviceMode('tablet')}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                   deviceMode === 'tablet'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title="Tablet (768px)"
+                title={lang === 'ug' ? 'تاب (تاختا كومپيۇتېر 768px)' : 'Tablet View (768px)'}
               >
                 <Tablet className="w-3.5 h-3.5" />
               </button>
               <button
+                type="button"
                 onClick={() => setDeviceMode('mobile')}
                 className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                   deviceMode === 'mobile'
-                    ? 'bg-white dark:bg-slate-800 text-indigo-600'
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs'
                     : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                 }`}
-                title="Mobile (375px)"
+                title={lang === 'ug' ? 'تېلېفون نۇسخىسى (Mobile 375px)' : 'Mobile View (375px)'}
               >
                 <Smartphone className="w-3.5 h-3.5" />
               </button>
             </div>
-          )}
 
-          {detectedType === 'web' && (
+            <span className="text-slate-400 dark:text-slate-600">|</span>
+
+            {/* Address Bar Simulation */}
+            <div className="px-2 py-0.5 font-mono text-[11px] text-slate-500 dark:text-slate-400 select-all">
+              /
+            </div>
+
+            <span className="text-slate-400 dark:text-slate-600">|</span>
+
+            {/* Reload button */}
             <button
+              type="button"
               onClick={reloadSandbox}
-              className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              title={lang === 'ug' ? 'قايتا يېڭىلاش' : 'Reload Sandbox'}
+              className="p-1 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              title={lang === 'ug' ? 'قايتا يېڭىلاش' : 'Reload'}
             >
-              <RotateCw className="w-4 h-4" />
+              <RotateCw className="w-3.5 h-3.5" />
             </button>
-          )}
 
+            {/* Orientation toggle (portrait / landscape for phone & tablet) */}
+            {deviceMode !== 'desktop' && (
+              <button
+                type="button"
+                onClick={() => setIsLandscape(!isLandscape)}
+                className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                  isLandscape ? 'bg-indigo-100 dark:bg-indigo-900 text-indigo-600' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+                title={lang === 'ug' ? 'توغرىسىغا / بويىغا ئايلاندۇرۇش' : 'Rotate Orientation'}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Fullscreen button */}
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-1 rounded-lg text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        )}
+
+        {/* Right Side: GitHub, Copy, Download, Close */}
+        <div className="flex items-center gap-1.5">
+          {/* GitHub Push Button */}
           <button
+            type="button"
+            onClick={() => setIsGitHubModalOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-slate-700/60"
+            title={lang === 'ug' ? 'گىتخوپقا (GitHub) يۈكلەش' : 'Push to GitHub'}
+          >
+            <Github className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="hidden md:inline">{lang === 'ug' ? 'GitHub قا يۈكلەش' : 'GitHub'}</span>
+          </button>
+
+          {/* Copy Code */}
+          <button
+            type="button"
             onClick={handleCopy}
             className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title={lang === 'ug' ? 'نۇسخىلاش' : 'Copy'}
@@ -494,15 +476,9 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
             {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
           </button>
 
+          {/* Download */}
           <button
-            onClick={handlePrint}
-            className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            title={lang === 'ug' ? 'PDF بېسىش / چۈشۈرۈش' : 'Print / Export PDF'}
-          >
-            <Printer className="w-4 h-4" />
-          </button>
-
-          <button
+            type="button"
             onClick={handleDownload}
             className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             title={lang === 'ug' ? 'ھۆججەت چۈشۈرۈش' : 'Download File'}
@@ -510,19 +486,13 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
             <Download className="w-4 h-4" />
           </button>
 
-          <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="p-1.5 rounded-xl text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-
+          {/* Close */}
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer ml-1"
-              title="Close Canvas"
+              title={lang === 'ug' ? 'تاقاش' : 'Close'}
             >
               <X className="w-4 h-4" />
             </button>
@@ -531,20 +501,44 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
       </div>
 
       {/* Main Canvas Body Area */}
-      <div className="flex-1 min-h-0 bg-slate-100 dark:bg-slate-950/60 overflow-hidden relative flex flex-col">
-        {/* 1. Preview Tab */}
+      <div className="flex-1 min-h-0 bg-slate-100/80 dark:bg-slate-950 overflow-hidden relative flex flex-col">
+        {/* 1. PREVIEW TAB */}
         {activeTab === 'preview' && (
           <div className="w-full h-full flex items-center justify-center p-2 sm:p-4 overflow-auto">
             {detectedType === 'web' ? (
               <div
-                className={`h-full ${getDeviceWidth()} w-full bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col transition-all`}
+                style={getDeviceContainerStyle()}
+                className={`bg-white dark:bg-slate-900 flex flex-col transition-all overflow-hidden ${
+                  deviceMode === 'mobile'
+                    ? 'rounded-[36px] border-8 border-slate-800 dark:border-slate-700 shadow-2xl relative'
+                    : deviceMode === 'tablet'
+                    ? 'rounded-[28px] border-8 border-slate-800 dark:border-slate-700 shadow-2xl'
+                    : 'w-full h-full rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800'
+                }`}
               >
+                {/* Mobile Device Speaker Notch */}
+                {deviceMode === 'mobile' && !isLandscape && (
+                  <div className="w-full flex justify-center pt-2 pb-1 bg-slate-900 shrink-0">
+                    <div className="w-20 h-3.5 bg-slate-800 rounded-full flex items-center justify-center">
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-700 mr-1.5" />
+                      <div className="w-6 h-1 rounded-full bg-slate-700" />
+                    </div>
+                  </div>
+                )}
+
                 <iframe
                   ref={iframeRef}
                   title="Canvas Web Sandbox"
                   sandbox="allow-scripts allow-modals allow-same-origin"
-                  className="w-full h-full border-none bg-white"
+                  className="w-full flex-1 border-none bg-white"
                 />
+
+                {/* Mobile Device Home Bar */}
+                {deviceMode === 'mobile' && !isLandscape && (
+                  <div className="w-full flex justify-center py-1.5 bg-slate-900 shrink-0">
+                    <div className="w-24 h-1 bg-slate-600 rounded-full" />
+                  </div>
+                )}
               </div>
             ) : detectedType === 'markdown' ? (
               <div className="w-full h-full max-w-4xl mx-auto bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 dark:border-slate-800 overflow-y-auto">
@@ -559,10 +553,11 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
                   <div className="flex items-center gap-2">
                     <Terminal className="w-4 h-4 text-indigo-500" />
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      {doc.language.toUpperCase()} Runner
+                      {doc.language.toUpperCase()} Interactive Runner
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={handleExecuteCode}
                     disabled={isExecuting}
                     className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-indigo-600/20 disabled:opacity-40 transition-all cursor-pointer"
@@ -581,6 +576,7 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
                     <div className="flex items-center justify-between pb-1 border-b border-slate-800 mb-2 text-slate-400 text-[10px]">
                       <span>EXECUTION RESULT</span>
                       <button
+                        type="button"
                         onClick={() => setExecutionOutput(null)}
                         className="hover:text-white"
                       >
@@ -595,12 +591,25 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
           </div>
         )}
 
-        {/* 2. Code Editor Tab */}
+        {/* 2. CODE EDITOR TAB */}
         {activeTab === 'code' && (
           <div className="w-full h-full flex flex-col bg-slate-950 text-slate-100">
             <div className="p-2.5 px-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span className="font-mono">Editable Source Code ({doc.language})</span>
-              <span>Instant Live Sync</span>
+              <div className="flex items-center gap-2">
+                <span className="font-mono font-bold uppercase text-indigo-400">{doc.language}</span>
+                <span>•</span>
+                <span>{doc.code.split('\n').length} lines</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>{lang === 'ug' ? 'ئىجرا قىلىپ كۆرۈش' : 'Run Preview'}</span>
+                </button>
+              </div>
             </div>
             <textarea
               value={doc.code}
@@ -612,12 +621,12 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
                 });
               }}
               spellCheck={false}
-              className="flex-1 w-full p-4 font-mono text-xs sm:text-sm bg-slate-950 text-slate-200 resize-none focus:outline-none leading-relaxed"
+              className="flex-1 w-full p-4 font-mono text-xs sm:text-sm bg-slate-950 text-slate-200 resize-none focus:outline-hidden leading-relaxed"
             />
           </div>
         )}
 
-        {/* 3. Console Logs Tab */}
+        {/* 3. CONSOLE LOGS TAB */}
         {activeTab === 'console' && (
           <div className="w-full h-full flex flex-col bg-slate-950 text-slate-200 font-mono text-xs">
             <div className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
@@ -626,8 +635,9 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
                 <span className="font-bold">Sandbox Console Output</span>
               </div>
               <button
+                type="button"
                 onClick={() => setLogs([])}
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 transition-colors"
+                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 transition-colors cursor-pointer"
               >
                 Clear Logs
               </button>
@@ -651,6 +661,16 @@ export const LiveCanvasSandbox: React.FC<LiveCanvasSandboxProps> = ({
           </div>
         )}
       </div>
+
+      {/* GitHub Push Modal */}
+      <GitHubExportModal
+        isOpen={isGitHubModalOpen}
+        onClose={() => setIsGitHubModalOpen(false)}
+        code={doc.code}
+        language={doc.language}
+        suggestedFilename={doc.title}
+        lang={lang}
+      />
     </div>
   );
 };

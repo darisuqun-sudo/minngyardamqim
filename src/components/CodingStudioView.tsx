@@ -22,9 +22,11 @@ import {
   HardDrive,
   Download,
   Share2,
+  Github,
 } from 'lucide-react';
 import { AppLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
+import { GitHubExportModal } from './GitHubExportModal';
 
 interface CodingStudioViewProps {
   lang: AppLanguage;
@@ -140,6 +142,7 @@ result;`);
   const [regexResult, setRegexResult] = useState<any>(null);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [gitHubExportData, setGitHubExportData] = useState<{ code: string; language: string; filename: string } | null>(null);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -600,8 +603,23 @@ result;`);
                 {genResult && (
                   <div className="flex items-center gap-2">
                     <button
+                      type="button"
+                      onClick={() =>
+                        setGitHubExportData({
+                          code: genResult.code,
+                          language: genResult.language || genLanguage,
+                          filename: `generated-${genResult.language || genLanguage}`,
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 cursor-pointer"
+                      title={lang === 'ug' ? 'گىتخوپقا (GitHub) يۈكلەش' : 'Push to GitHub'}
+                    >
+                      <Github className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>GitHub</span>
+                    </button>
+                    <button
                       onClick={() => copyToClipboard(genResult.code, 'gen-code')}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors cursor-pointer"
                     >
                       {copiedKey === 'gen-code' ? (
                         <>
@@ -757,22 +775,39 @@ result;`);
                 </div>
 
                 {debugResult && (
-                  <button
-                    onClick={() => copyToClipboard(debugResult.fixedCode, 'debug-fixed')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
-                  >
-                    {copiedKey === 'debug-fixed' ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Copy Fixed Code</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGitHubExportData({
+                          code: debugResult.fixedCode,
+                          language: debugLang,
+                          filename: `fixed-${debugLang}`,
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 cursor-pointer"
+                      title={lang === 'ug' ? 'گىتخوپقا (GitHub) يۈكلەش' : 'Push to GitHub'}
+                    >
+                      <Github className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>GitHub</span>
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(debugResult.fixedCode, 'debug-fixed')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      {copiedKey === 'debug-fixed' ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Copy Fixed Code</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1008,22 +1043,39 @@ result;`);
                 </span>
 
                 {convertResult && (
-                  <button
-                    onClick={() => copyToClipboard(convertResult.convertedCode, 'convert-code')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
-                  >
-                    {copiedKey === 'convert-code' ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Copy Converted</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGitHubExportData({
+                          code: convertResult.convertedCode,
+                          language: toLang,
+                          filename: `converted-${toLang}`,
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 cursor-pointer"
+                      title={lang === 'ug' ? 'گىتخوپقا (GitHub) يۈكلەش' : 'Push to GitHub'}
+                    >
+                      <Github className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>GitHub</span>
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(convertResult.convertedCode, 'convert-code')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      {copiedKey === 'convert-code' ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Copy Converted</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1121,22 +1173,39 @@ result;`);
                 </span>
 
                 {dbResult && (
-                  <button
-                    onClick={() => copyToClipboard(dbResult.schemaSql, 'db-schema')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
-                  >
-                    {copiedKey === 'db-schema' ? (
-                      <>
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Copied</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Copy Schema</span>
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setGitHubExportData({
+                          code: dbResult.schemaSql,
+                          language: 'sql',
+                          filename: 'schema.sql',
+                        })
+                      }
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors border border-slate-700 cursor-pointer"
+                      title={lang === 'ug' ? 'گىتخوپقا (GitHub) يۈكلەش' : 'Push to GitHub'}
+                    >
+                      <Github className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>GitHub</span>
+                    </button>
+                    <button
+                      onClick={() => copyToClipboard(dbResult.schemaSql, 'db-schema')}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors cursor-pointer"
+                    >
+                      {copiedKey === 'db-schema' ? (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Copy Schema</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1525,6 +1594,18 @@ export async function chatStream(prompt: string) {
             ))}
           </div>
         </div>
+      )}
+
+      {/* GitHub Export Modal */}
+      {gitHubExportData && (
+        <GitHubExportModal
+          isOpen={Boolean(gitHubExportData)}
+          onClose={() => setGitHubExportData(null)}
+          code={gitHubExportData.code}
+          language={gitHubExportData.language}
+          suggestedFilename={gitHubExportData.filename}
+          lang={lang}
+        />
       )}
     </div>
   );

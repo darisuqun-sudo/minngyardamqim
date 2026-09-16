@@ -63,12 +63,14 @@ import {
   Zap,
   Ban,
   Loader2,
+  Github,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { AppLanguage, ChatMessage, ChatAttachment, AssistantPersona, ChatSession, NoteItem } from '../types';
 import { LOCALIZED_PERSONAS } from '../data/localizedData';
 import { TRANSLATIONS } from '../data/translations';
 import { LiveCanvasSandbox, CanvasDocument } from './LiveCanvasSandbox';
+import { GitHubExportModal } from './GitHubExportModal';
 import { ModelSelectorModal } from './ModelSelectorModal';
 import { GoogleDriveModal } from './GoogleDriveModal';
 import { getGeminiModelById, DEFAULT_GEMINI_MODEL_ID, GEMINI_MODELS } from '../data/geminiModels';
@@ -295,6 +297,7 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
   });
   const [isCanvasOpen, setIsCanvasOpen] = useState<boolean>(false);
   const [canvasDoc, setCanvasDoc] = useState<CanvasDocument | null>(null);
+  const [gitHubExportData, setGitHubExportData] = useState<{ code: string; language: string; filename: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1256,7 +1259,7 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
       </div>
 
       {/* Main Workspace Layout (Single Chat vs Split Workspace Canvas) */}
-      <div className={isCanvasOpen ? 'grid grid-cols-1 lg:grid-cols-2 gap-4 items-start' : 'w-full'}>
+      <div className={isCanvasOpen ? 'grid grid-cols-1 xl:grid-cols-12 gap-5 items-start w-full' : 'w-full'}>
         {/* Main Chat Stream Container with Drag & Drop */}
         <div
           onDragOver={(e) => {
@@ -1274,7 +1277,11 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
               handleFiles(e.dataTransfer.files);
             }
           }}
-          className={`relative rounded-3xl bg-white dark:bg-slate-900 border transition-all shadow-sm flex flex-col h-[620px] ${
+          className={`relative rounded-3xl bg-white dark:bg-slate-900 border transition-all shadow-sm flex flex-col ${
+            isCanvasOpen
+              ? 'xl:col-span-5 h-[calc(100vh-140px)] min-h-[660px]'
+              : 'max-w-5xl mx-auto h-[calc(100vh-140px)] min-h-[660px]'
+          } ${
             isDraggingOver
               ? 'border-indigo-500 ring-2 ring-indigo-500/30'
               : 'border-slate-200 dark:border-slate-800'
@@ -1787,6 +1794,21 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                                               ? 'تشغيل في اللوحة'
                                               : 'Run in Canvas'}
                                           </span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setGitHubExportData({
+                                              code: codeContent,
+                                              language: langType || 'text',
+                                              filename: `${(langType || 'code').toLowerCase()}-snippet`,
+                                            })
+                                          }
+                                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white font-medium flex items-center gap-1 text-[11px] border border-slate-700/80 shadow-2xs cursor-pointer transition-colors"
+                                          title={lang === 'ug' ? 'گىتخوپقا (GitHub) يۈكلەش' : 'Push to GitHub'}
+                                        >
+                                          <Github className="w-3 h-3 text-emerald-400" />
+                                          <span>{lang === 'ug' ? 'GitHub' : 'GitHub'}</span>
                                         </button>
                                         <button
                                           type="button"
@@ -2706,9 +2728,9 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
         </div>
       </div>
 
-      {/* Live Canvas Workspace in Split Mode */}
+      {/* Live Canvas Workspace in Split Mode (Google AI Studio style) */}
       {isCanvasOpen && (
-        <div className="w-full">
+        <div className="xl:col-span-7 w-full h-[calc(100vh-140px)] min-h-[660px] sticky top-4">
           <LiveCanvasSandbox
             lang={lang}
             activeDoc={canvasDoc}
@@ -2718,6 +2740,18 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
         </div>
       )}
     </div>
+
+      {/* GitHub Export & Push Modal */}
+      {gitHubExportData && (
+        <GitHubExportModal
+          isOpen={Boolean(gitHubExportData)}
+          onClose={() => setGitHubExportData(null)}
+          code={gitHubExportData.code}
+          language={gitHubExportData.language}
+          suggestedFilename={gitHubExportData.filename}
+          lang={lang}
+        />
+      )}
 
       {/* Image Lightbox Modal */}
       {previewImageModal && (
