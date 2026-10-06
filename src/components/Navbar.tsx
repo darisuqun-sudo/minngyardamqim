@@ -28,7 +28,11 @@ import {
   Target,
   FileAudio,
   Code2,
-  Shield,
+  Languages,
+  ScrollText,
+  Heart,
+  Cloud,
+  Palette,
 } from 'lucide-react';
 import { AppLanguage, NavTab, ThemeMode } from '../types';
 import { TRANSLATIONS } from '../data/translations';
@@ -79,6 +83,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navItems: { id: NavTab; label: string; icon: any }[] = [
     { id: 'dashboard', label: t.hub, icon: Sparkles },
     { id: 'codingStudio', label: t.codingStudio || 'Coding Studio', icon: Code2 },
+    { id: 'imageStudio', label: t.imageStudio || 'AI Image Studio', icon: Palette },
+    { id: 'languageTutor', label: t.languageTutor || 'Language Tutor', icon: Languages },
+    { id: 'contractBuilder', label: t.contractBuilder || 'Contracts & Docs', icon: ScrollText },
+    { id: 'mindfulness', label: t.mindfulness || 'Mindfulness', icon: Heart },
+    { id: 'cloudSync', label: t.cloudSync || 'Cloud Sync', icon: Cloud },
     { id: 'projects', label: t.projects, icon: FolderGit2 },
     { id: 'voicememos', label: t.voiceMemos || 'Voice Memos', icon: Mic },
     { id: 'analytics', label: t.analytics || 'Analytics', icon: TrendingUp },
@@ -287,8 +296,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               )}
             </div>
-
-
 
             {/* Mobile / Tablet Menu Toggle */}
             <button

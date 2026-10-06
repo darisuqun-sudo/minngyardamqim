@@ -23,6 +23,11 @@ import {
   Target,
   SunMedium,
   BarChart3,
+  ScrollText,
+  Heart,
+  Cloud,
+  Code2,
+  Palette,
 } from 'lucide-react';
 import { AppLanguage, NavTab, RoadmapPhase, TaskItem, NoteItem } from '../types';
 import { LOCALIZED_PILLARS, LOCALIZED_ROADMAP } from '../data/localizedData';
@@ -243,6 +248,170 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
                 {lang === 'ug' ? 'كۈنلۈك تەييارلىق ۋە ئاۋازلىق كۆرسەتمە' : 'Daily Briefing & Voice TTS'}
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 🚀 New High-Value Workspaces Showcase */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-500" />
+              <span>{lang === 'ug' ? '✨ يېڭى يۇقىرى قىممەتلىك مەركەزلەر' : '✨ High-Value Workspaces'}</span>
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              {lang === 'ug'
+                ? 'تىل ئۆگىنىش، رەسمىي پۈتۈك، نەپەس مەشىقى ۋە بۇلۇتقا زاپاسلاش'
+                : 'Language tutoring, contracts & letters, mindfulness, and cloud backups'}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* Card 0: AI Image & Logo Studio */}
+          <div
+            onClick={() => setActiveTab('imageStudio')}
+            className="p-5 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/5 to-transparent border border-pink-200 dark:border-pink-800 hover:border-pink-400 dark:hover:border-pink-600 hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-pink-600 to-purple-600 text-white flex items-center justify-center shadow-md shadow-pink-500/20 group-hover:scale-105 transition-transform">
+                  <Palette className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pink-100 dark:bg-pink-950 text-pink-800 dark:text-pink-300">
+                  {lang === 'ug' ? 'كۆرۈنۈش' : 'Vision'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {lang === 'ug' ? '🎨 رەسىم & لوگو ستۇدىيىسى' : 'AI Image & Art Studio'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {lang === 'ug'
+                  ? 'ئۇيغۇرچە تەسۋىردىن رەقەملىك سەنئەت، ۋېكتور لوگو ۋە UI نۇسخىلىرىنى ھاسىللاش.'
+                  : 'Generate high-res art, vector logos with companion SVG, and UI mockups.'}
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-pink-100 dark:border-pink-900/40 flex items-center justify-between text-xs font-bold text-pink-700 dark:text-pink-300">
+              <span>{lang === 'ug' ? 'رەسىم سىزىش' : 'Create Art'}</span>
+              <ArrowIcon className="w-4 h-4 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 1: AI Language Tutor */}
+          <div
+            onClick={() => setActiveTab('languageTutor')}
+            className="p-5 rounded-2xl bg-gradient-to-br from-teal-500/10 via-emerald-500/5 to-transparent border border-teal-200 dark:border-teal-800 hover:border-teal-400 dark:hover:border-teal-600 hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-md shadow-teal-500/20 group-hover:scale-105 transition-transform">
+                  <Languages className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300">
+                  {lang === 'ug' ? 'كۆپ تىل' : 'Polyglot'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {lang === 'ug' ? '🌍 تىل ۋە گرامماتىكا مەشقاۋۇلى' : 'AI Language Tutor'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {lang === 'ug'
+                  ? 'ئىنگلىز، تۈرك، ئەرەب تىللىرى سۆزلۈكلىرى، تەلەپپۇز ۋە گرامماتىكا تەھلىلى.'
+                  : 'Master English, Turkish, & Arabic with audio pronunciation and AI grammar audits.'}
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-teal-100 dark:border-teal-900/40 flex items-center justify-between text-xs font-bold text-teal-700 dark:text-teal-300">
+              <span>{lang === 'ug' ? 'مەشىقنى باشلاش' : 'Start Lesson'}</span>
+              <ArrowIcon className="w-4 h-4 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 2: Contract & Document Builder */}
+          <div
+            onClick={() => setActiveTab('contractBuilder')}
+            className="p-5 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent border border-indigo-200 dark:border-indigo-800 hover:border-indigo-400 dark:hover:border-indigo-600 hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-11 h-11 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                  <ScrollText className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300">
+                  {lang === 'ug' ? 'قانۇنىي & رەسمىي' : 'Legal & CV'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {lang === 'ug' ? '📝 رەسمىي پۈتۈك & ھۆججەت تەييارلاش' : 'Smart Contract & Docs'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {lang === 'ug'
+                  ? 'خىزمەت توختىمى، رەسمىي ئىلتىماس، تەرجىمىھال (CV) ۋە كېلىشىملەرنى بىر نەچچە سېكۇنتتا يېزىش.'
+                  : 'Instant employment agreements, CVs, NDAs, and petitions with clause audits.'}
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-indigo-100 dark:border-indigo-900/40 flex items-center justify-between text-xs font-bold text-indigo-700 dark:text-indigo-300">
+              <span>{lang === 'ug' ? 'ھۆججەت تۈزۈش' : 'Draft Document'}</span>
+              <ArrowIcon className="w-4 h-4 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 3: Mindfulness & Stress Relief */}
+          <div
+            onClick={() => setActiveTab('mindfulness')}
+            className="p-5 rounded-2xl bg-gradient-to-br from-rose-500/10 via-pink-500/5 to-transparent border border-rose-200 dark:border-rose-800 hover:border-rose-400 dark:hover:border-rose-600 hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-11 h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-500/20 group-hover:scale-105 transition-transform">
+                  <Heart className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300">
+                  {lang === 'ug' ? 'خاتىرجەملىك' : 'Zen & Breath'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {lang === 'ug' ? '🧘 پىسخىكىلىق خاتىرجەملىك & نەپەس' : 'Mindfulness & Breathing'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {lang === 'ug'
+                  ? '4-7-8 پەننىي نەپەس مەشىقى، سىنتېزلانغان تەبىئەت ئاۋازلىرى ۋە كۈندىلىك كەيپىيات تەھلىلى.'
+                  : '4-7-8 relaxation breathwork, procedural ambient sounds, and AI mood coaching.'}
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-rose-100 dark:border-rose-900/40 flex items-center justify-between text-xs font-bold text-rose-700 dark:text-rose-300">
+              <span>{lang === 'ug' ? 'تىنچلىنىش' : 'Breathe & Reset'}</span>
+              <ArrowIcon className="w-4 h-4 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* Card 4: Cloud Sync & Google Drive */}
+          <div
+            onClick={() => setActiveTab('cloudSync')}
+            className="p-5 rounded-2xl bg-gradient-to-br from-sky-500/10 via-blue-500/5 to-transparent border border-sky-200 dark:border-sky-800 hover:border-sky-400 dark:hover:border-sky-600 hover:shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-11 h-11 rounded-xl bg-sky-600 text-white flex items-center justify-center shadow-md shadow-sky-500/20 group-hover:scale-105 transition-transform">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 dark:bg-sky-950 text-sky-800 dark:text-sky-300">
+                  {lang === 'ug' ? 'زاپاسلاش' : 'Drive & Sync'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {lang === 'ug' ? '☁️ بۇلۇتقا ماس قەدەملەش & زاپاس' : 'Cloud Sync & Backups'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {lang === 'ug'
+                  ? 'پۈتۈن ۋەزىپە، پاراڭ ۋە كالېندارنى بىر كۇنۇپكا بىلەن JSON زاپاسلاش ياكى Drive قا باغلاش.'
+                  : 'One-click full system snapshots, instant restoration, and Google Drive links.'}
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-sky-100 dark:border-sky-900/40 flex items-center justify-between text-xs font-bold text-sky-700 dark:text-sky-300">
+              <span>{lang === 'ug' ? 'زاپاسلاش مەركىزى' : 'Open Sync Hub'}</span>
+              <ArrowIcon className="w-4 h-4 group-hover:translate-x-1 rtl:group-hover:-translate-x-1 transition-transform" />
             </div>
           </div>
         </div>

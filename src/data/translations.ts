@@ -11,6 +11,11 @@ export interface TranslationDict {
   knowledge: string;
   projects: string;
   codingStudio?: string;
+  imageStudio?: string;
+  languageTutor?: string;
+  contractBuilder?: string;
+  mindfulness?: string;
+  cloudSync?: string;
   financeAndHabits: string;
   tasksAndNotes: string;
   focusAndTools: string;
@@ -255,6 +260,11 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDict> = {
     knowledge: 'بىلىم ئامبىرى',
     projects: 'تۈر قېلىپلىرى',
     codingStudio: 'پىروگرامما & كود مەركىزى',
+    imageStudio: 'رەسىم ئىجادىيىتى (AI)',
+    languageTutor: 'تىل مەشقاۋۇلى (AI)',
+    contractBuilder: 'رەسمىي پۈتۈك & ھۆججەت',
+    mindfulness: 'خاتىرجەملىك & نەپەس',
+    cloudSync: 'بۇلۇتقا زاپاسلاش',
     financeAndHabits: 'ئادەت & خامچوت',
     tasksAndNotes: 'ۋەزىپە & خاتىرە',
     focusAndTools: 'زېھىن & قوراللار',
@@ -467,6 +477,11 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDict> = {
     knowledge: 'Knowledge Vault',
     projects: 'Project Templates',
     codingStudio: 'Coding & Dev Studio',
+    imageStudio: 'AI Image & Art Studio',
+    languageTutor: 'AI Language Tutor',
+    contractBuilder: 'Smart Contracts & Docs',
+    mindfulness: 'Mindfulness & Breathing',
+    cloudSync: 'Cloud Sync & Backup',
     financeAndHabits: 'Habits & Finance',
     tasksAndNotes: 'Tasks & Notes',
     focusAndTools: 'Focus & Tools',
@@ -679,6 +694,11 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDict> = {
     knowledge: 'Bilgi Kasası',
     projects: 'Proje Şablonları',
     codingStudio: 'Kodlama & Geliştirici Stüdyosu',
+    imageStudio: 'AI Resim & Sanat Stüdyosu',
+    languageTutor: 'AI Dil Koçu',
+    contractBuilder: 'Resmi Sözleşme & Belge',
+    mindfulness: 'Farkındalık & Nefes',
+    cloudSync: 'Bulut Yedekleme',
     financeAndHabits: 'Alışkanlık & Finans',
     tasksAndNotes: 'Görevler & Notlar',
     focusAndTools: 'Odak & Araçlar',
@@ -891,6 +911,11 @@ export const TRANSLATIONS: Record<AppLanguage, TranslationDict> = {
     knowledge: 'قاعدة المعرفة',
     projects: 'نماذج المشاريع',
     codingStudio: 'استوديو البرمجة والتطوير',
+    imageStudio: 'استوديو الصور والفن الذكي',
+    languageTutor: 'معلم اللغات الذكي',
+    contractBuilder: 'العقود والوثائق الرسمية',
+    mindfulness: 'الراحة والتنفس الذهني',
+    cloudSync: 'المزامنة السحابية',
     financeAndHabits: 'العادات والميزانية',
     tasksAndNotes: 'المهام والملاحظات',
     focusAndTools: 'التركيز والأدوات',

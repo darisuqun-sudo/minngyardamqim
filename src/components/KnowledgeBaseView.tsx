@@ -218,8 +218,21 @@ export const KnowledgeBaseView: React.FC<KnowledgeBaseViewProps> = ({
           persona: 'planner',
         }),
       });
-      const data = await res.json();
-      setQaAnswer(data.reply || 'No answer generated');
+      let reply = '';
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        reply = data.reply || data.fallback || '';
+      } else {
+        const text = await res.text();
+        try {
+          const data = JSON.parse(text);
+          reply = data.reply || data.fallback || '';
+        } catch {
+          reply = text;
+        }
+      }
+      setQaAnswer(reply || 'جاۋاب قوبۇل قىلىندى.');
     } catch (e) {
       console.error('Q&A failed:', e);
     } finally {

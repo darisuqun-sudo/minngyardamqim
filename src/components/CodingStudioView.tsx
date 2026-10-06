@@ -23,6 +23,10 @@ import {
   Download,
   Share2,
   Github,
+  Monitor,
+  Smartphone,
+  Tablet,
+  Eye,
 } from 'lucide-react';
 import { AppLanguage } from '../types';
 import { TRANSLATIONS } from '../data/translations';
@@ -106,6 +110,9 @@ KeyError: 'amount'`);
   const [dbResult, setDbResult] = useState<any>(null);
 
   // Sandbox Runner State
+  const [runnerLanguage, setRunnerLanguage] = useState<'javascript' | 'python' | 'html'>('javascript');
+  const [webViewport, setWebViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [isExecutingRunner, setIsExecutingRunner] = useState<boolean>(false);
   const [runnerCode, setRunnerCode] = useState<string>(`// 🚀 JavaScript / TypeScript Live Sandbox
 function calculateStats(numbers) {
   console.log("سانلار تەھلىل قىلىنىۋاتىدۇ:", numbers);
@@ -271,13 +278,44 @@ result;`);
     }
   };
 
-  // Handler: Run JavaScript Sandbox
-  const handleRunSandbox = () => {
-    const logs: string[] = [];
+  // Handler: Run Multi-language Sandbox (JS, Python, HTML/Web)
+  const handleRunSandbox = async () => {
     setRunnerError('');
     setRunnerOutput('');
     setRunnerLogs([]);
+    setIsExecutingRunner(true);
 
+    if (runnerLanguage === 'python') {
+      try {
+        const res = await fetch('/api/code/run-python', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: runnerCode }),
+        });
+        const data = await res.json();
+        setRunnerExecTime(data.executionTime || 0);
+        if (data.stdout) {
+          setRunnerLogs(data.stdout.trim().split('\n'));
+        }
+        if (data.stderr) {
+          setRunnerError(data.stderr);
+        }
+      } catch (err: any) {
+        setRunnerError(err.message || 'Python execution failed');
+      } finally {
+        setIsExecutingRunner(false);
+      }
+      return;
+    }
+
+    if (runnerLanguage === 'html') {
+      setRunnerExecTime(5);
+      setIsExecutingRunner(false);
+      return;
+    }
+
+    // JavaScript / TypeScript Sandbox
+    const logs: string[] = [];
     const originalLog = console.log;
     const originalError = console.error;
     const startTime = performance.now();
@@ -302,7 +340,6 @@ result;`);
     };
 
     try {
-      // Evaluate within sandbox scope
       const evalResult = new Function(runnerCode)();
       const endTime = performance.now();
       setRunnerExecTime(Number((endTime - startTime).toFixed(2)));
@@ -323,7 +360,23 @@ result;`);
     } finally {
       console.log = originalLog;
       console.error = originalError;
+      setIsExecutingRunner(false);
     }
+  };
+
+  const handleRunInSandbox = (code: string, langHint: string) => {
+    const l = (langHint || '').toLowerCase();
+    let targetLang: 'javascript' | 'python' | 'html' = 'javascript';
+    if (l.includes('py')) {
+      targetLang = 'python';
+    } else if (l.includes('html') || l.includes('xml')) {
+      targetLang = 'html';
+    } else {
+      targetLang = 'javascript';
+    }
+    setRunnerLanguage(targetLang);
+    setRunnerCode(code);
+    setActiveSubTab('runner');
   };
 
   // Handler: Regex Studio
@@ -604,6 +657,15 @@ result;`);
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => handleRunInSandbox(genResult.code, genResult.language || genLanguage)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                      title={lang === 'ug' ? 'نەق مەيداندا ئىجرا قىلىش' : 'Run in Sandbox'}
+                    >
+                      <Play className="w-3.5 h-3.5 fill-white" />
+                      <span>{lang === 'ug' ? 'ئىجرا قىلىش' : 'Run'}</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() =>
                         setGitHubExportData({
                           code: genResult.code,
@@ -776,6 +838,15 @@ result;`);
 
                 {debugResult && (
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRunInSandbox(debugResult.fixedCode, debugLang)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                      title={lang === 'ug' ? 'نەق مەيداندا ئىجرا قىلىش' : 'Run in Sandbox'}
+                    >
+                      <Play className="w-3.5 h-3.5 fill-white" />
+                      <span>{lang === 'ug' ? 'ئىجرا قىلىش' : 'Run'}</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -1046,6 +1117,15 @@ result;`);
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
+                      onClick={() => handleRunInSandbox(convertResult.convertedCode, toLang)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm cursor-pointer"
+                      title={lang === 'ug' ? 'نەق مەيداندا ئىجرا قىلىش' : 'Run in Sandbox'}
+                    >
+                      <Play className="w-3.5 h-3.5 fill-white" />
+                      <span>{lang === 'ug' ? 'ئىجرا قىلىش' : 'Run'}</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() =>
                         setGitHubExportData({
                           code: convertResult.convertedCode,
@@ -1242,19 +1322,66 @@ result;`);
         </div>
       )}
 
-      {/* TAB 6: LIVE JAVASCRIPT / TYPESCRIPT RUNNER */}
+      {/* TAB 6: MULTI-LANGUAGE LIVE SANDBOX RUNNER */}
       {activeSubTab === 'runner' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-6 space-y-4">
             <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <Play className="w-4 h-4 text-emerald-500" />
-                  <span>{lang === 'ug' ? 'كود كىرگۈزۈش ساندۇقى' : 'Live Code Sandbox Editor'}</span>
-                </h2>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                  In-Browser Engine
-                </span>
+                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                    {lang === 'ug' ? 'نەق مەيدان كود ساندۇقى' : 'Live Code Sandbox'}
+                  </span>
+                </div>
+
+                {/* Language Switcher */}
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRunnerLanguage('javascript');
+                      if (!runnerCode.includes('calculateStats') && !runnerCode.includes('console.log')) {
+                        setRunnerCode(`// 🚀 JavaScript / TypeScript Live Sandbox\nfunction calculateStats(numbers) {\n  const sum = numbers.reduce((a, b) => a + b, 0);\n  return { sum, avg: sum / numbers.length, max: Math.max(...numbers) };\n}\nconsole.log("نەتىجە:", calculateStats([10, 20, 30, 40, 50]));`);
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      runnerLanguage === 'javascript'
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    ⚡ JS/TS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRunnerLanguage('python');
+                      setRunnerCode(`# 🐍 Python 3 Live Runner\ndef analyze(records):\n    print("Python نەق مەيداندا ئىجرا بولۇۋاتىدۇ:")\n    for r in records:\n        print(f"• {r['name']}: {r['score']} نومۇر")\n    avg = sum(r['score'] for r in records) / len(records)\n    return f"ئوتتۇرىچە: {avg:.1f}"\n\ndata = [{"name": "ئالىم", "score": 96}, {"name": "دىلنۇر", "score": 89}]\nprint(analyze(data))`);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      runnerLanguage === 'python'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    🐍 Python
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRunnerLanguage('html');
+                      setRunnerCode(`<!DOCTYPE html>\n<html>\n<head>\n  <script src="https://cdn.tailwindcss.com"></script>\n</head>\n<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4 font-sans">\n  <div class="max-w-sm w-full bg-slate-800 border border-slate-700 rounded-3xl p-6 text-center space-y-4 shadow-2xl">\n    <div class="text-3xl">✨</div>\n    <h3 class="font-bold text-lg">نەق مەيدان Web سەھىپىسى</h3>\n    <p class="text-xs text-slate-400">Tailwind CSS ۋە كۆرۈنمە يۈز كودلىرى.</p>\n    <button onclick="alert('سالام دۇنيا!')" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 font-bold text-xs transition-all shadow-md">\n      بېسىپ كۆرۈڭ\n    </button>\n  </div>\n</body>\n</html>`);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                      runnerLanguage === 'html'
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
+                  >
+                    🌐 HTML/Web
+                  </button>
+                </div>
               </div>
 
               <textarea
@@ -1265,67 +1392,136 @@ result;`);
               />
 
               <button
+                type="button"
                 onClick={handleRunSandbox}
-                className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all"
+                disabled={isExecutingRunner}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
               >
-                <Play className="w-4 h-4 fill-white" />
-                <span>{lang === 'ug' ? 'كودنى دەرھال ئىجرا قىلىش (Run Code)' : 'Execute Code Instantly'}</span>
+                {isExecutingRunner ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>{lang === 'ug' ? 'ئىجرا قىلىنىۋاتىدۇ...' : 'Executing...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>
+                      {lang === 'ug'
+                        ? `كودنى دەرھال ئىجرا قىلىش (${runnerLanguage.toUpperCase()})`
+                        : `Execute ${runnerLanguage.toUpperCase()} Instantly`}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>
 
           <div className="lg:col-span-6 space-y-4">
-            <div className="p-5 rounded-3xl bg-slate-950 text-slate-100 border border-slate-800 space-y-4 min-h-[460px] flex flex-col shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-mono font-bold text-slate-300">Console & Terminal Output</span>
+            {runnerLanguage === 'html' ? (
+              <div className="p-5 rounded-3xl bg-slate-950 text-slate-100 border border-slate-800 space-y-4 min-h-[460px] flex flex-col shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-purple-400" />
+                    <span className="text-xs font-mono font-bold text-slate-300">Live HTML / CSS Sandbox Preview</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setWebViewport('desktop')}
+                      className={`p-1.5 rounded text-xs ${webViewport === 'desktop' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}
+                      title="Desktop"
+                    >
+                      <Monitor className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWebViewport('tablet')}
+                      className={`p-1.5 rounded text-xs ${webViewport === 'tablet' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}
+                      title="Tablet"
+                    >
+                      <Tablet className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWebViewport('mobile')}
+                      className={`p-1.5 rounded text-xs ${webViewport === 'mobile' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}
+                      title="Mobile"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                {runnerExecTime !== null && (
-                  <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{runnerExecTime} ms</span>
-                  </span>
-                )}
+
+                <div className="flex-1 bg-slate-900 rounded-2xl overflow-hidden flex items-center justify-center p-2 min-h-[360px]">
+                  <iframe
+                    srcDoc={runnerCode}
+                    title="Live Web Sandbox"
+                    sandbox="allow-scripts allow-modals"
+                    className={`h-full min-h-[360px] bg-white rounded-xl shadow-lg border border-slate-800 transition-all ${
+                      webViewport === 'mobile'
+                        ? 'w-[360px]'
+                        : webViewport === 'tablet'
+                        ? 'w-[640px]'
+                        : 'w-full'
+                    }`}
+                  />
+                </div>
               </div>
-
-              {/* Logs */}
-              <div className="flex-1 space-y-2 overflow-auto font-mono text-xs">
-                {runnerLogs.length > 0 && (
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Standard Output (Console.log):</span>
-                    {runnerLogs.map((log, idx) => (
-                      <div key={idx} className="p-2 rounded bg-slate-900/90 text-slate-200 border border-slate-800/80 whitespace-pre-wrap">
-                        {log}
-                      </div>
-                    ))}
+            ) : (
+              <div className="p-5 rounded-3xl bg-slate-950 text-slate-100 border border-slate-800 space-y-4 min-h-[460px] flex flex-col shadow-2xl">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-mono font-bold text-slate-300">
+                      {runnerLanguage.toUpperCase()} Console & Terminal Output
+                    </span>
                   </div>
-                )}
+                  {runnerExecTime !== null && (
+                    <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{runnerExecTime} ms</span>
+                    </span>
+                  )}
+                </div>
 
-                {runnerOutput && (
-                  <div className="space-y-1 pt-2">
-                    <span className="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold">Returned Value:</span>
-                    <div className="p-3 rounded-xl bg-emerald-950/40 text-emerald-300 border border-emerald-900/60 whitespace-pre-wrap">
-                      {runnerOutput}
+                {/* Logs */}
+                <div className="flex-1 space-y-2 overflow-auto font-mono text-xs">
+                  {runnerLogs.length > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">Standard Output (Stdout):</span>
+                      {runnerLogs.map((log, idx) => (
+                        <div key={idx} className="p-2 rounded bg-slate-900/90 text-slate-200 border border-slate-800/80 whitespace-pre-wrap">
+                          {log}
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {runnerError && (
-                  <div className="p-3 rounded-xl bg-red-950/40 text-red-300 border border-red-900/60 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    <span className="whitespace-pre-wrap">{runnerError}</span>
-                  </div>
-                )}
+                  {runnerOutput && (
+                    <div className="space-y-1 pt-2">
+                      <span className="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold">Returned Value:</span>
+                      <div className="p-3 rounded-xl bg-emerald-950/40 text-emerald-300 border border-emerald-900/60 whitespace-pre-wrap">
+                        {runnerOutput}
+                      </div>
+                    </div>
+                  )}
 
-                {!runnerOutput && !runnerError && runnerLogs.length === 0 && (
-                  <div className="h-48 flex flex-col items-center justify-center text-slate-600 space-y-2">
-                    <Terminal className="w-10 h-10 stroke-[1.5]" />
-                    <p className="text-xs">Click "Execute Code Instantly" to see runtime outputs and logs.</p>
-                  </div>
-                )}
+                  {runnerError && (
+                    <div className="p-3 rounded-xl bg-red-950/40 text-red-300 border border-red-900/60 flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                      <span className="whitespace-pre-wrap">{runnerError}</span>
+                    </div>
+                  )}
+
+                  {!runnerOutput && !runnerError && runnerLogs.length === 0 && (
+                    <div className="h-48 flex flex-col items-center justify-center text-slate-600 space-y-2">
+                      <Terminal className="w-10 h-10 stroke-[1.5]" />
+                      <p className="text-xs">Click "Execute" to run the code and inspect outputs.</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

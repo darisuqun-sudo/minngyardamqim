@@ -81,6 +81,7 @@ import {
   startVoiceRecorder,
   transcribeVoiceAudio,
 } from '../utils/aiVoiceService';
+import { latinOrPinyinToUyghurArabic } from '../utils/UyghurScriptConverter';
 
 interface AssistantChatViewProps {
   lang: AppLanguage;
@@ -690,7 +691,11 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
         // Multimodal Gemini speech recognition with specialized Uyghur support
         const transcribedText = await transcribeVoiceAudio(base64, mimeType, lang);
         if (transcribedText) {
-          setInput((prev) => (prev.trim() ? `${prev.trim()} ${transcribedText}` : transcribedText));
+          // Pass spoken string through UyghurScriptConverter before setting into user prompt input field
+          const convertedScript = lang === 'ug'
+            ? latinOrPinyinToUyghurArabic(transcribedText)
+            : transcribedText;
+          setInput((prev) => (prev.trim() ? `${prev.trim()} ${convertedScript}` : convertedScript));
         }
       } catch (err) {
         console.error('Voice transcription error:', err);
@@ -1023,8 +1028,13 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
       stopRecordingSession();
     }
 
+    const rawText = input.trim();
+    const finalPromptText = lang === 'ug' && rawText
+      ? latinOrPinyinToUyghurArabic(rawText)
+      : rawText;
+
     onSendMessage(
-      input.trim() || (attachments.length > 0 ? (lang === 'ug' ? 'قوشۇلغان ھۆججەت / رەسىمنى تەھلىل قىلىپ بەر' : 'Please analyze the attached file/image.') : ''),
+      finalPromptText || (attachments.length > 0 ? (lang === 'ug' ? 'قوشۇلغان ھۆججەت / رەسىمنى تەھلىل قىلىپ بەر' : 'Please analyze the attached file/image.') : ''),
       selectedPersonaId,
       attachments.length > 0 ? attachments : undefined,
       activeModelId
@@ -2027,6 +2037,40 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
 
             {/* Quick Actions for OCR & Multimodal Analysis */}
             <div className="flex items-center gap-1.5 flex-wrap">
+              {attachments.some(a => a.name.endsWith('.pdf') || a.name.endsWith('.doc') || a.name.endsWith('.docx') || a.name.endsWith('.txt') || a.name.endsWith('.md')) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput(
+                        lang === 'ug'
+                          ? 'بۇ ھۆججەتنىڭ مەزمۇنىنى بەتلەر بويىچە سۈزۈك خۇلاسىلەپ، قايسى بەتتە نېمىلەر ئوتتۇرىغا قويۇلغانلىقىنى ئېنىق كۆرسىتىپ بەر.'
+                          : 'Summarize this document page-by-page with verifiable section references.'
+                      );
+                      textareaRef.current?.focus();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold flex items-center gap-1 border border-emerald-200 dark:border-emerald-800 transition-colors cursor-pointer"
+                  >
+                    <span>📑</span>
+                    <span>{lang === 'ug' ? 'بەتلەر بويىچە خۇلاسىلەش' : 'Page-by-Page Summary'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInput(
+                        lang === 'ug'
+                          ? 'ھۆججەتتىكى ئەڭ مۇھىم يادرولۇق نۇقتىلارنى، ھەربىرىنىڭ دەلىلى ۋە نەقىلىنى بەت نومۇرى بىلەن تەمىنلە.'
+                          : 'Extract key findings and recommendations with exact page and section citations.'
+                      );
+                      textareaRef.current?.focus();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/60 dark:hover:bg-purple-900 text-purple-700 dark:text-purple-300 text-[11px] font-semibold flex items-center gap-1 border border-purple-200 dark:border-purple-800 transition-colors cursor-pointer"
+                  >
+                    <span>🎯</span>
+                    <span>{lang === 'ug' ? 'نۇقتىلار & دەلىللەر' : 'Key Findings & Citations'}</span>
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -2416,12 +2460,14 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
               </div>
             </div>
 
-            {/* Main Textarea with User's Photo Placeholder */}
+            {/* Main Textarea with RTL format for Uyghur script */}
             <div className="relative">
               <textarea
                 ref={textareaRef}
+                id="chat-user-input-textarea"
                 rows={1}
                 value={input}
+                dir={lang === 'ug' || lang === 'ar' || /[\u0600-\u06FF]/.test(input) ? 'rtl' : 'auto'}
                 onChange={(e) => {
                   setInput(e.target.value);
                   adjustTextareaHeight();
@@ -2430,11 +2476,31 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                 placeholder={
                   isRecording
                     ? t.voiceInputListening
+                    : lang === 'ug'
+                    ? "بۇ يەرگە سۈئالىڭىزنى يېزىڭ ياكى سۆزلەڭ، @ ۋە / ئارقىلىق تاللاڭ..."
                     : "Ask anything, @ to mention, / for actions"
                 }
-                className="w-full resize-none bg-transparent text-sm sm:text-base text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none whitespace-pre-wrap break-words break-all overflow-y-auto overflow-x-hidden leading-relaxed block transition-all px-0.5 py-1"
+                className={`w-full resize-none bg-transparent text-sm sm:text-base text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none whitespace-pre-wrap break-words break-all overflow-y-auto overflow-x-hidden leading-relaxed block transition-all px-0.5 py-1 ${
+                  lang === 'ug' || lang === 'ar' || /[\u0600-\u06FF]/.test(input)
+                    ? 'text-right font-medium'
+                    : 'text-left'
+                }`}
                 style={{ minHeight: '44px', maxHeight: '180px' }}
               />
+
+              {/* Quick Uyghur Transliteration Helper when Latin phonetics detected in input */}
+              {lang === 'ug' && /[a-zA-Z]/.test(input) && (
+                <div className="flex items-center justify-end pt-1 pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setInput(latinOrPinyinToUyghurArabic(input))}
+                    className="text-xs px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs font-medium"
+                    title="لاتىن/پىنيىن فونېتىكىسىنى ئۇيغۇر ئەرەب يېزىقىغا ئايلاندۇرۇش"
+                  >
+                    <span>ياخشىمۇسىز ➔ ياخشىمۇسىز (ئۇيغۇرچە يېزىققا ئايلاندۇرۇش)</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Bottom Controls Row Matching User Photo */}

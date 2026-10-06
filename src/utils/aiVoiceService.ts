@@ -1,4 +1,5 @@
 import { AppLanguage } from '../types';
+import { latinOrPinyinToUyghurArabic } from './UyghurScriptConverter';
 
 let currentAudio: HTMLAudioElement | null = null;
 let currentAbortController: AbortController | null = null;
@@ -245,5 +246,9 @@ export async function transcribeVoiceAudio(
   }
 
   const data = await response.json();
-  return (data.transcript || '').trim();
+  const rawTranscript = (data.transcript || '').trim();
+  if (language === 'ug' && rawTranscript) {
+    return latinOrPinyinToUyghurArabic(rawTranscript);
+  }
+  return rawTranscript;
 }

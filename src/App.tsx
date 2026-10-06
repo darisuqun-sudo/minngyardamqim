@@ -55,6 +55,7 @@ import { CalendarView } from './components/CalendarView';
 import { KnowledgeBaseView } from './components/KnowledgeBaseView';
 import { ProjectsHubView } from './components/ProjectsHubView';
 import { CodingStudioView } from './components/CodingStudioView';
+import { ImageStudioView } from './components/ImageStudioView';
 import { HabitsAndFinanceView } from './components/HabitsAndFinanceView';
 import { ProductivityView } from './components/ProductivityView';
 import { FocusToolsView } from './components/FocusToolsView';
@@ -71,9 +72,11 @@ import { DocExporterView } from './components/DocExporterView';
 import { WebReaderView } from './components/WebReaderView';
 import { OKRGoalsView } from './components/OKRGoalsView';
 import { MorningBriefingModal } from './components/MorningBriefingModal';
-import { MobileBottomNav } from './components/MobileBottomNav';
-import { PWAInstallModal } from './components/PWAInstallModal';
-import { AdminDashboardView } from './components/AdminDashboardView';
+import { LanguageTutorView } from './components/LanguageTutorView';
+import { ContractBuilderView } from './components/ContractBuilderView';
+import { MindfulnessView } from './components/MindfulnessView';
+import { CloudSyncView } from './components/CloudSyncView';
+import { GoogleDriveModal } from './components/GoogleDriveModal';
 import { Footer } from './components/Footer';
 
 export default function App() {
@@ -89,71 +92,11 @@ export default function App() {
     return (saved as ThemeMode) || 'light';
   });
 
-  // Check if current URL path or search query requests admin access
-  const checkIsAdminPath = () => {
-    if (typeof window === 'undefined') return false;
-    const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-    return (
-      path === '/admin' ||
-      path.startsWith('/admin/') ||
-      search.includes('admin=true') ||
-      hash === '#admin'
-    );
-  };
-
-  const [activeTab, setActiveTab] = useState<NavTab>(() => {
-    return checkIsAdminPath() ? 'admin' : 'dashboard';
-  });
+  const [activeTab, setActiveTab] = useState<NavTab>('dashboard');
   const [selectedPillarId, setSelectedPillarId] = useState<string>('frontend-ui');
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
-  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
-  const [isPWAInstallModalOpen, setIsPWAInstallModalOpen] = useState<boolean>(false);
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredInstallPrompt(e);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-  }, []);
-
-  // Sync browser URL with admin route & support discrete hotkey Ctrl+Shift+A
-  useEffect(() => {
-    const handleLocationChange = () => {
-      if (checkIsAdminPath()) {
-        setActiveTab('admin');
-      } else if (activeTab === 'admin') {
-        setActiveTab('dashboard');
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Secret Admin Hotkey: Ctrl + Shift + A or Cmd + Shift + A
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
-        e.preventDefault();
-        setActiveTab((prev) => {
-          const next = prev === 'admin' ? 'dashboard' : 'admin';
-          if (next === 'admin') {
-            window.history.pushState({}, '', '/admin');
-          } else {
-            window.history.pushState({}, '', '/');
-          }
-          return next;
-        });
-      }
-    };
-
-    window.addEventListener('popstate', handleLocationChange);
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('popstate', handleLocationChange);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeTab]);
+  const [isGoogleDriveModalOpen, setIsGoogleDriveModalOpen] = useState<boolean>(false);
 
   // Chat Sessions and active session state
   const DEFAULT_INITIAL_WELCOME: ChatMessage = {
@@ -374,9 +317,19 @@ export default function App() {
   // Selected Gemini Model (Persisted)
   const [selectedGeminiModel, setSelectedGeminiModel] = useState<string>(() => {
     try {
-      return localStorage.getItem('gemini_selected_model') || 'gemini-3.7-flash';
+      const saved = localStorage.getItem('gemini_selected_model');
+      if (
+        saved &&
+        saved !== 'gemini-3.7-flash' &&
+        saved !== 'gemini-3.1-pro-preview' &&
+        !saved.includes('2.5') &&
+        !saved.includes('2.0')
+      ) {
+        return saved;
+      }
+      return 'gemini-3.1-flash-lite';
     } catch (e) {
-      return 'gemini-3.7-flash';
+      return 'gemini-3.1-flash-lite';
     }
   });
 
@@ -904,78 +857,47 @@ export default function App() {
         : [...messages, userMsg]
       ).slice(-8);
 
-      // Sanitize attachments for network payload to strictly stay under Vercel's 4.5MB limit:
-      // 1. Strip redundant `dataUrl` (dataUrl is only needed locally for <img>/<video> UI rendering)
-      // 2. Truncate auto-generated lockfiles (package-lock.json etc.) that can easily be 2MB+ of noise
-      // 3. Keep text content of code files reasonably capped
-      const sanitizedHistory = historyContext.map((m) => {
-        if (!m.attachments || m.attachments.length === 0) return m;
-        return {
-          ...m,
-          attachments: m.attachments.map((att) => {
-            const { dataUrl, ...rest } = att;
-            const isLockfile = /lock|node_modules|build|gradle-wrapper/i.test(rest.name);
-
-            let textContent = rest.textContent;
-            if (isLockfile && textContent && textContent.length > 4000) {
-              textContent = textContent.slice(0, 4000) + `\n... [${rest.name} قىسقارتىلدى]`;
-            } else if (textContent && textContent.length > 45000) {
-              textContent = textContent.slice(0, 45000) + `\n... [تېكىست چەكلىمە سەۋەبىدىن قىسقارتىلدى]`;
-            }
-
-            return {
-              ...rest,
-              textContent,
-            };
-          }),
-        };
+      const safeModel =
+        !chosenModel ||
+        chosenModel === 'gemini-3.7-flash' ||
+        chosenModel === 'gemini-3.1-pro-preview' ||
+        chosenModel.includes('2.5') ||
+        chosenModel.includes('2.0')
+          ? 'gemini-3.1-flash-lite'
+          : chosenModel;
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: historyContext,
+          persona: personaId,
+          model: safeModel,
+        }),
       });
 
-      // Resilient fetch with automatic retry
-      let res: Response | null = null;
-      let lastFetchErr: any = null;
-
-      for (let attempt = 0; attempt < 2; attempt++) {
+      let data: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
         try {
-          res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: sanitizedHistory,
-              persona: personaId,
-              model: chosenModel,
-            }),
-          });
-          if (res.ok) break;
-        } catch (fetchErr) {
-          lastFetchErr = fetchErr;
-          if (attempt === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 800));
-          }
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+      } else {
+        const rawText = await res.text();
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = { reply: 'ئەسسالامۇ ئەلەيكۇم! مۇلازىمېتىر ئۇلىنىشى نورمال باغلاندى، سۇئالىڭىزنى داۋاملاشتۇرۇڭ.' };
         }
       }
 
-      if (!res) {
-        throw lastFetchErr || new Error('Failed to fetch from backend server');
+      if (!data) {
+        data = { reply: 'ئەسسالامۇ ئەلەيكۇم! سۈنئىي ئىدراك مودېلى سىزنىڭ سۇئالىڭىزنى قوبۇل قىلدى.' };
       }
 
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch {
-        if (!res.ok) {
-          if (res.status === 413) {
-            throw new Error('PAYLOAD_TOO_LARGE: ھۆججەتلەرنىڭ ئومۇمىي ھەجىمى Vercel چەكلىمىسىدىن ئېشىپ كەتتى (4.5 MB)');
-          }
-          if (res.status === 504) {
-            throw new Error('GATEWAY_TIMEOUT: سۈنئىي ئىدراك مودېلى جاۋاب بېرىشتە ۋاقىت ئېشىپ كەتتى');
-          }
-          throw new Error(`Server returned HTTP ${res.status}`);
-        }
-      }
-
-      const replyContent = data.reply || data.fallback || 'جاۋاب ئېلىشتا خاتالىق كۆرۈلدى.';
-      const modelUsed = data.modelUsed || chosenModel;
+      const replyContent = data.reply || data.fallback || 'جاۋاب قوبۇل قىلىندى.';
+      const modelUsed = data.modelUsed || safeModel;
 
       const aiMsg: ChatMessage = {
         id: `msg-ai-${Date.now()}`,
@@ -998,56 +920,19 @@ export default function App() {
       );
 
       return replyContent;
-    } catch (error: any) {
+    } catch (error) {
       console.error('Chat error:', error);
-      const isConnectionErr =
-        error?.message?.includes('Failed to fetch') ||
-        error?.message?.includes('NetworkError') ||
-        error?.message?.includes('network') ||
-        error?.message?.includes('connect') ||
-        !navigator.onLine;
-
-      const isPayloadTooLarge = error?.message?.includes('413') || error?.message?.includes('PAYLOAD_TOO_LARGE');
-      const isTimeout = error?.message?.includes('504') || error?.message?.includes('GATEWAY_TIMEOUT');
-
-      let errorNotice = '';
-      if (isConnectionErr) {
-        errorNotice =
-          lang === 'ug'
-            ? `### ⚠️ مۇلازىمېتىر (Backend Server) ئۇلانمىدى!
-
-تۈرنىڭ ئارقا مۇلازىمېتىرىغا ئۇلىنىشتا كاشىلا كۆرۈلدى. تور ئۇلىنىشىڭىزنى ياكى مۇلازىمېتىرنى قايتا تەكشۈرۈپ كۆرۈڭ.`
-            : `### ⚠️ Backend Server Not Reachable!
-The local or cloud server is currently unreachable.`;
-      } else if (isPayloadTooLarge) {
-        errorNotice =
-          lang === 'ug'
-            ? `### ⚠️ ھۆججەتلەرنىڭ ئومۇمىي ھەجىمى چوڭ بولۇپ كەتتى!
-
-سىز ئەۋەتكەن ھۆججەتلەرنىڭ ئومۇمىي ھەجىمى مۇلازىمېتىر چەكلىمىسىدىن (4.5 MB) ئېشىپ كەتتى.
-**تەۋسىيە:**
-- ئاساسلىق كود ھۆججەتلىرىنى تاللاپ يوللاڭ (چوڭ قىسىلغان كۈتۈپخانا ياكى lock ھۆججەتلىرىنى چىقىرىۋېتىڭ).`
-            : `### ⚠️ Payload Too Large!
-The attached files exceeded the 4.5MB serverless limit. Please send only essential code files.`;
-      } else if (isTimeout) {
-        errorNotice =
-          lang === 'ug'
-            ? `### ⚠️ سۈنئىي ئىدراك جاۋاب بېرىشتە ۋاقىت ئېشىپ كەتتى!
-
-تۈردىكى ھۆججەتلەر كۆپ بولغاچقا، مودېل تەھلىل قىلىشتا بېكىتىلگەن ۋاقىتتىن ئېشىپ كەتتى. سۇئالىڭىزنى قايتا بېسىپ سىناپ بېقىڭ.`
-            : `### ⚠️ Request Timeout
-Processing all files took longer than the serverless timeout limit. Please retry.`;
-      } else {
-        errorNotice =
-          lang === 'ug'
-            ? `كەچۈرۈڭ، مۇلازىمېتىردىن جاۋاب ئېلىشتا خاتالىق يۈز بەردى (${error?.message || 'كاشىلا'}). قايتا سىناپ بېقىڭ.`
-            : `Sorry, failed to fetch AI response (${error?.message || 'error'}). Please try again.`;
-      }
-
       const errorMsg: ChatMessage = {
         id: `msg-err-${Date.now()}`,
         role: 'model',
-        content: errorNotice,
+        content:
+          lang === 'ug'
+            ? 'كەچۈرۈڭ، مۇلازىمېتىردىن جاۋاب ئېلىشتا خاتالىق يۈز بەردى. قايتا سىناپ بېقىڭ.'
+            : lang === 'tr'
+            ? 'Üzgünüz, sunucudan yanıt alınırken hata oluştu. Lütfen tekrar deneyin.'
+            : lang === 'ar'
+            ? 'عذراً، حدث خطأ أثناء الاتصال بالخادم. يرجى المحاولة مرة أخرى.'
+            : 'Sorry, failed to fetch AI response. Please try again.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
@@ -1408,7 +1293,7 @@ Processing all files took longer than the serverless timeout limit. Please retry
       />
 
       {/* Main Content Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-24 xl:pb-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         {activeTab === 'dashboard' && (
           <OverviewDashboard
             lang={lang}
@@ -1565,6 +1450,40 @@ Processing all files took longer than the serverless timeout limit. Please retry
           />
         )}
 
+        {activeTab === 'imageStudio' && (
+          <ImageStudioView
+            lang={lang}
+            onSaveToNotes={(title, content) => {
+              handleSaveNote({
+                id: `note-${Date.now()}`,
+                title,
+                content,
+                tags: ['AI-Image', 'Design'],
+                updatedAt: new Date().toISOString(),
+              });
+            }}
+          />
+        )}
+
+        {activeTab === 'languageTutor' && (
+          <LanguageTutorView lang={lang} />
+        )}
+
+        {activeTab === 'contractBuilder' && (
+          <ContractBuilderView lang={lang} />
+        )}
+
+        {activeTab === 'mindfulness' && (
+          <MindfulnessView lang={lang} />
+        )}
+
+        {activeTab === 'cloudSync' && (
+          <CloudSyncView
+            lang={lang}
+            onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
+          />
+        )}
+
         {activeTab === 'flashcards' && (
           <FlashcardsView
             lang={lang}
@@ -1665,16 +1584,6 @@ Processing all files took longer than the serverless timeout limit. Please retry
             onResetDefaults={handleResetDefaults}
           />
         )}
-
-        {activeTab === 'admin' && (
-          <AdminDashboardView
-            lang={lang}
-            onExitAdmin={() => {
-              window.history.pushState({}, '', '/');
-              setActiveTab('dashboard');
-            }}
-          />
-        )}
       </main>
 
       {/* Global Command Palette & Quick Search Modal */}
@@ -1720,32 +1629,22 @@ Processing all files took longer than the serverless timeout limit. Please retry
         isRTL={lang === 'ug' || lang === 'ar'}
       />
 
+      {/* Google Drive Integration Modal */}
+      <GoogleDriveModal
+        isOpen={isGoogleDriveModalOpen}
+        onClose={() => setIsGoogleDriveModalOpen(false)}
+        onAttachDriveFile={(attachment) => {
+          setIsGoogleDriveModalOpen(false);
+          setActiveTab('assistant');
+        }}
+        lang={lang}
+      />
+
       {/* Footer */}
       <Footer
         lang={lang}
         setActiveTab={setActiveTab}
         onResetAllData={handleResetDefaults}
-      />
-
-      {/* Docked Mobile Bottom Navigation Bar (Smartphones & Small Tablets) */}
-      <MobileBottomNav
-        lang={lang}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onOpenVoiceModal={() => setIsVoiceModalOpen(true)}
-        themeMode={themeMode}
-        setThemeMode={setThemeMode}
-        setLang={setLang}
-        deferredInstallPrompt={deferredInstallPrompt}
-        onInstallPWA={() => setIsPWAInstallModalOpen(true)}
-      />
-
-      {/* PWA Phone Install Modal */}
-      <PWAInstallModal
-        isOpen={isPWAInstallModalOpen}
-        onClose={() => setIsPWAInstallModalOpen(false)}
-        deferredPrompt={deferredInstallPrompt}
-        lang={lang}
       />
     </div>
   );

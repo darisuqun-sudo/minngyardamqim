@@ -23,6 +23,11 @@ import {
   X,
   FileText,
   Code2,
+  Languages,
+  ScrollText,
+  Heart,
+  Cloud,
+  Palette,
 } from 'lucide-react';
 import {
   AppLanguage,
@@ -98,6 +103,11 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   const navigationItems: PaletteItem[] = [
     { id: 'nav-dashboard', title: t.hub, category: 'Navigation', icon: Sparkles, action: () => { setActiveTab('dashboard'); onClose(); } },
     { id: 'nav-codingStudio', title: t.codingStudio || 'Coding & Developer Studio', category: 'Navigation', icon: Code2, action: () => { setActiveTab('codingStudio'); onClose(); } },
+    { id: 'nav-imageStudio', title: t.imageStudio || 'AI Image & Logo Studio', category: 'Navigation', icon: Palette, action: () => { setActiveTab('imageStudio'); onClose(); } },
+    { id: 'nav-languageTutor', title: t.languageTutor || 'AI Language Tutor', category: 'Navigation', icon: Languages, action: () => { setActiveTab('languageTutor'); onClose(); } },
+    { id: 'nav-contractBuilder', title: t.contractBuilder || 'Smart Contracts & Docs', category: 'Navigation', icon: ScrollText, action: () => { setActiveTab('contractBuilder'); onClose(); } },
+    { id: 'nav-mindfulness', title: t.mindfulness || 'Mindfulness & Breathing', category: 'Navigation', icon: Heart, action: () => { setActiveTab('mindfulness'); onClose(); } },
+    { id: 'nav-cloudSync', title: t.cloudSync || 'Cloud Sync & Backup', category: 'Navigation', icon: Cloud, action: () => { setActiveTab('cloudSync'); onClose(); } },
     { id: 'nav-voicememos', title: t.voiceMemos || 'AI Voice Memos', category: 'Navigation', icon: Mic, action: () => { setActiveTab('voicememos'); onClose(); } },
     { id: 'nav-analytics', title: t.analytics || 'Analytics & Insights', category: 'Navigation', icon: Sparkles, action: () => { setActiveTab('analytics'); onClose(); } },
     { id: 'nav-docExporter', title: t.docExporter || 'Document Studio & PDF Export', category: 'Navigation', icon: FileText, action: () => { setActiveTab('docExporter'); onClose(); } },

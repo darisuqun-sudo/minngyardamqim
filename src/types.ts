@@ -4,6 +4,11 @@ export type NavTab =
   | 'dashboard'
   | 'codingStudio'
   | 'codeStudio'
+  | 'imageStudio'
+  | 'languageTutor'
+  | 'contractBuilder'
+  | 'mindfulness'
+  | 'cloudSync'
   | 'blueprint'
   | 'assistant'
   | 'calendar'
@@ -26,17 +31,14 @@ export type NavTab =
   | 'financeAndHabits'
   | 'productivity'
   | 'focus'
-  | 'settings'
-  | 'admin';
+  | 'settings';
 
 export type ThemeMode = 'light' | 'dark' | 'midnight' | 'oled' | 'sepia';
-
-export type ChatAttachmentType = 'image' | 'video' | 'audio' | 'archive' | 'file';
 
 export interface ChatAttachment {
   id: string;
   name: string;
-  type: ChatAttachmentType;
+  type: 'image' | 'file' | 'video' | 'audio' | 'archive';
   mimeType: string;
   size: number;
   dataUrl?: string;
@@ -465,15 +467,131 @@ export interface ExportDocConfig {
   theme: 'clean' | 'modern' | 'minimal';
 }
 
-// 17. GitHub Integration Types
+// 17. AI Language Tutor & Learning Center
+export interface LanguageWordItem {
+  id: string;
+  word: string;
+  phonetic: string;
+  translation: string;
+  partOfSpeech: string;
+  exampleSentence: string;
+  exampleTranslation: string;
+  mastered?: boolean;
+}
+
+export interface LanguageDialogueTurn {
+  role: 'speakerA' | 'speakerB';
+  speakerName: string;
+  text: string;
+  translation: string;
+}
+
+export interface LanguageLesson {
+  id: string;
+  topicTitle: string;
+  targetLanguage: 'en' | 'tr' | 'ar';
+  level: 'beginner' | 'intermediate' | 'advanced';
+  dailyWords: LanguageWordItem[];
+  dialogue: {
+    title: string;
+    scenario: string;
+    turns: LanguageDialogueTurn[];
+  };
+  grammarTip: {
+    title: string;
+    rule: string;
+    goodExample: string;
+    badExample: string;
+    explanation: string;
+  };
+  createdAt: string;
+}
+
+export interface GrammarCorrectionItem {
+  errorSnippet: string;
+  correction: string;
+  reason: string;
+  category: string;
+}
+
+export interface GrammarCheckResult {
+  originalText: string;
+  correctedText: string;
+  hasErrors: boolean;
+  score: number;
+  explanations: GrammarCorrectionItem[];
+  tips: string[];
+}
+
+// 18. Smart Contract & Official Document Builder
+export type ContractType = 'petition' | 'job' | 'nda' | 'offer' | 'cv' | 'lease' | 'general';
+
+export interface ContractDocument {
+  id: string;
+  type: ContractType;
+  title: string;
+  targetLanguage: 'ug' | 'tr' | 'en' | 'ar';
+  documentMarkdown: string;
+  summary: string;
+  parties: {
+    partyA: string;
+    partyB: string;
+  };
+  effectiveDate?: string;
+  legalTips: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 19. Mindfulness & Stress Relief
+export interface MoodJournalEntry {
+  id: string;
+  timestamp: string;
+  dateStr: string;
+  moodLevel: 1 | 2 | 3 | 4 | 5; // 1: severe stress, 5: peaceful/great
+  moodTag: 'calm' | 'energized' | 'tired' | 'stressed' | 'focused' | 'grateful';
+  gratitudeNotes: string[];
+  reflectionText: string;
+  aiEmpathyMessage?: string;
+}
+
+export interface BreathingPreset {
+  id: string;
+  name: string;
+  desc: string;
+  inhaleSec: number;
+  holdSec: number;
+  exhaleSec: number;
+  holdPostSec?: number;
+}
+
+// 20. Cloud Sync & Snapshot
+export interface CloudSyncSnapshot {
+  id: string;
+  timestamp: string;
+  deviceLabel: string;
+  version: string;
+  dataSizeKb: number;
+  itemCounts: {
+    tasks: number;
+    sessions: number;
+    events: number;
+    notes: number;
+    docs: number;
+    habits: number;
+  };
+  rawJsonString: string;
+}
+
+// 21. GitHub Integration Types
 export interface GitHubUser {
   login: string;
   id: number;
   avatar_url: string;
-  name: string | null;
+  name?: string;
   html_url: string;
   public_repos: number;
-  bio?: string | null;
+  bio?: string;
 }
 
 export interface GitHubRepo {
@@ -482,20 +600,32 @@ export interface GitHubRepo {
   full_name: string;
   private: boolean;
   html_url: string;
-  description: string | null;
+  description?: string;
   default_branch: string;
   updated_at?: string;
 }
 
 export interface GitHubPushPayload {
-  token?: string;
   owner: string;
   repo: string;
   path: string;
   content: string;
   message: string;
   branch?: string;
+  token?: string;
   sha?: string;
+}
+
+// 22. AI Image Generation & Studio Types
+export interface GeneratedImageItem {
+  id: string;
+  prompt: string;
+  revisedPrompt?: string;
+  style: 'photorealistic' | 'digital-art' | 'anime' | 'logo' | 'ui-design' | 'watercolor' | 'cyberpunk' | 'sketch';
+  aspectRatio: '1:1' | '16:9' | '9:16' | '4:3' | '3:2';
+  dataUrl: string; // base64 or URL
+  createdAt: string;
+  favorite?: boolean;
 }
 
 
