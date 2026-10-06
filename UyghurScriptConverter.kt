@@ -1,4 +1,4 @@
-package com.smartai.assistant.utils
+package com.minngyardamqim.app.utils
 
 /**
  * UyghurScriptConverter
@@ -58,7 +58,10 @@ object UyghurScriptConverter {
         "uyghur" to "ئۇيغۇر",
         "uyghurche" to "ئۇيغۇرچە",
         "suniy eqil" to "سۈنئىي ئەقىل",
-        "sun'iy eqil" to "سۈنئىي ئەقىل"
+        "sun'iy eqil" to "سۈنئىي ئەقىل",
+        "minng yardamqim" to "مىڭ ياردەمچىم",
+        "ming yardemchim" to "مىڭ ياردەمچىم",
+        "mingyardamqim" to "مىڭ ياردەمچىم"
     )
 
     private val INITIAL_VOWELS = mapOf(
@@ -203,9 +206,6 @@ object UyghurScriptConverter {
         return sb.toString()
     }
 
-    /**
-     * Converts Latin / Pinyin phonetics into authentic Uyghur Arabic script.
-     */
     @JvmStatic
     fun latinOrPinyinToUyghurArabic(input: String?): String {
         if (input.isNullOrBlank()) return ""
@@ -215,7 +215,6 @@ object UyghurScriptConverter {
 
         var text = input.trim()
 
-        // Check full phrase replacements
         for ((phrase, replacement) in PHONETIC_DICTIONARY) {
             val regex = Regex("(?i)\\b${Regex.escape(phrase)}\\b")
             text = text.replace(regex, replacement)

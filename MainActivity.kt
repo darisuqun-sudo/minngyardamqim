@@ -1,4 +1,4 @@
-package com.smartai.assistant
+package com.minngyardamqim.app
 
 import android.app.Activity
 import android.content.Intent
@@ -6,20 +6,21 @@ import android.os.Bundle
 import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import com.smartai.assistant.ui.ChatScreen
-import com.smartai.assistant.utils.UyghurScriptConverter
+import androidx.activity.viewModels
+import com.minngyardamqim.app.utils.UyghurScriptConverter
+import com.minngyardamqim.app.viewmodel.MainViewModel
 import java.util.Locale
 
 /**
- * MainActivity handling voice recognition and routing through UyghurScriptConverter
+ * MainActivity for MinngYardamqim (مىڭ ياردەمچىم)
+ * Native Android Jetpack Compose Activity with edge-to-edge support,
+ * authentic Uyghur Arabic transliteration and voice recognition.
  */
 class MainActivity : ComponentActivity() {
 
-    private var currentPromptText by mutableStateOf("")
+    private val viewModel: MainViewModel by viewModels()
 
     // Speech recognition launcher
     private val speechRecognizerLauncher = registerForActivityResult(
@@ -32,21 +33,19 @@ class MainActivity : ComponentActivity() {
             if (spokenText.isNotBlank()) {
                 // Pass spoken recognition through UyghurScriptConverter to enforce authentic Uyghur Arabic script
                 val uyghurArabicScript = UyghurScriptConverter.latinOrPinyinToUyghurArabic(spokenText)
-                currentPromptText = uyghurArabicScript
+                viewModel.sendPrompt(uyghurArabicScript)
             }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
         setContent {
-            ChatScreen(
-                onSendPrompt = { prompt ->
-                    // Handle sending prompt to GeminiService
-                },
-                onStartVoiceRecognition = {
-                    startVoiceRecognition()
-                }
+            MinngYardamqimApp(
+                viewModel = viewModel,
+                onStartVoiceRecognition = { startVoiceRecognition() }
             )
         }
     }
@@ -55,17 +54,18 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ug-CN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "سۆزلەڭ (Speak now in Uyghur)...")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "سۆزلەڭ (Speak in Uyghur)...")
         }
         try {
             speechRecognizerLauncher.launch(intent)
         } catch (e: Exception) {
-            // Fallback to general intent
-            val fallbackIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            }
-            speechRecognizerLauncher.launch(fallbackIntent)
+            try {
+                val fallbackIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                }
+                speechRecognizerLauncher.launch(fallbackIntent)
+            } catch (_: Exception) {}
         }
     }
 }
