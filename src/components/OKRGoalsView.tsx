@@ -350,11 +350,7 @@ export const OKRGoalsView: React.FC<OKRGoalsViewProps> = ({
                       </div>
                     </div>
                     <button
-                      onClick={() => {
-                        if (confirm(language === 'ug' ? 'بۇ OKR نى ئۆچۈرەمسىز؟' : 'Delete OKR goal?')) {
-                          onDeleteGoal(goal.id);
-                        }
-                      }}
+                      onClick={() => onDeleteGoal(goal.id)}
                       className="p-2 text-neutral-400 hover:text-red-500 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors"
                       title="Delete Goal"
                     >

@@ -143,10 +143,6 @@ export const CloudSyncView: React.FC<CloudSyncViewProps> = ({
   };
 
   const handleRestoreFromSnapshot = (rawJson: string) => {
-    if (!window.confirm(lang === 'ug' ? 'بۇ زاپاسنى ئەسلىگە كەلتۈرۈشنى جەزملەشتۈرەمسىز؟ ھازىرقى سانلىق مەلۇماتلار يېڭىلىنىدۇ.' : 'Are you sure you want to restore from this snapshot?')) {
-      return;
-    }
-
     try {
       const parsed = JSON.parse(rawJson);
       if (!parsed || !parsed.data) {

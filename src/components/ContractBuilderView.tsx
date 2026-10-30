@@ -141,27 +141,43 @@ export const ContractBuilderView: React.FC<ContractBuilderViewProps> = ({ lang }
   };
 
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
     const content = isEditing ? editableMarkdown : (generatedDoc?.documentMarkdown || '');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>${docTitle}</title>
-          <style>
-            body { font-family: "Microsoft Uighur", "Segoe UI", Arial, sans-serif; padding: 40px; line-height: 1.8; direction: ${targetDocLang === 'ug' || targetDocLang === 'ar' ? 'rtl' : 'ltr'}; }
-            h1, h2, h3 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
-            hr { border: 0; border-top: 1px solid #cbd5e1; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <pre style="white-space: pre-wrap; font-family: inherit;">${content}</pre>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    if (!content) return;
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    const doc = iframe.contentWindow?.document;
+    if (doc) {
+      doc.open();
+      doc.write(`
+        <html>
+          <head>
+            <title>${docTitle}</title>
+            <style>
+              body { font-family: "Microsoft Uighur", "Segoe UI", Arial, sans-serif; padding: 40px; line-height: 1.8; direction: ${targetDocLang === 'ug' || targetDocLang === 'ar' ? 'rtl' : 'ltr'}; }
+              h1, h2, h3 { color: #1e293b; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+              hr { border: 0; border-top: 1px solid #cbd5e1; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <pre style="white-space: pre-wrap; font-family: inherit;">${content}</pre>
+          </body>
+        </html>
+      `);
+      doc.close();
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+    }
+    setTimeout(() => {
+      try {
+        document.body.removeChild(iframe);
+      } catch (e) {}
+    }, 2000);
   };
 
   const handleDownload = () => {

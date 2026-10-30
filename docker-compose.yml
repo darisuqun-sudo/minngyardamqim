@@ -1,0 +1,11 @@
+services:
+  minngyardamqim:
+    build: .
+    container_name: minngyardamqim-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: always

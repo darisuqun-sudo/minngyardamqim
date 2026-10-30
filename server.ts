@@ -7,7 +7,33 @@ import { latinOrPinyinToUyghurArabic } from "./src/utils/UyghurScriptConverter";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
+
+// Security headers & lightweight in-memory rate limiting for API endpoints
+const apiRateMap = new Map<string, { count: number; resetAt: number }>();
+
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  if (req.path.startsWith("/api/")) {
+    const ip = req.ip || req.socket.remoteAddress || "local";
+    const now = Date.now();
+    const record = apiRateMap.get(ip);
+    if (!record || now > record.resetAt) {
+      apiRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    } else {
+      record.count += 1;
+      if (record.count > 120) {
+        return res.status(429).json({
+          error: "Too many requests. Please wait a moment and try again.",
+        });
+      }
+    }
+  }
+  next();
+});
 
 app.use(express.json({ limit: "30mb" }));
 
@@ -206,11 +232,20 @@ async function generateWithGeminiFallback(
   let lastError: any = null;
   for (const model of candidateModels) {
     try {
+      // Strip deprecated sampling parameters (temperature, topP, topK, candidateCount) for gemini-3.8-flash / gemini-4-argon
+      const sanitizedConfig = options.config ? { ...options.config } : undefined;
+      if (sanitizedConfig && (model === "gemini-3.8-flash" || model === "gemini-4-argon")) {
+        delete sanitizedConfig.temperature;
+        delete sanitizedConfig.topP;
+        delete sanitizedConfig.topK;
+        delete sanitizedConfig.candidateCount;
+      }
+
       const response = await withTimeout(
         ai.models.generateContent({
           model,
           contents: options.contents,
-          config: options.config,
+          config: sanitizedConfig,
         }),
         15000,
         `Model "${model}" call timed out after 15.0s`

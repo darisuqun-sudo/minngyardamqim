@@ -145,9 +145,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <h1 className="text-sm sm:text-base font-bold tracking-tight text-slate-900 dark:text-white">
                   {t.appName}
                 </h1>
-                <span className="text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                  {t.modelBadge}
-                </span>
               </div>
               <p className="text-[10px] text-slate-500 dark:text-slate-400 hidden sm:block">
                 {t.appSubtitle}
@@ -197,17 +194,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </kbd>
               </button>
             )}
-
-            {/* Voice AI Trigger Button */}
-            <button
-              id="voice-ai-trigger-btn"
-              onClick={onOpenVoiceModal}
-              title={t.voiceInputTitle}
-              className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition-colors shadow-xs"
-            >
-              <Mic className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span className="hidden sm:inline">Voice</span>
-            </button>
 
             {/* Language Dropdown */}
             <div className="relative" ref={langRef}>

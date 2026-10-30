@@ -40,6 +40,8 @@ export const SettingsSyncView: React.FC<SettingsSyncViewProps> = ({
   const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importSuccess, setImportSuccess] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,11 +51,21 @@ export const SettingsSyncView: React.FC<SettingsSyncViewProps> = ({
     reader.onload = (event) => {
       try {
         const parsed = JSON.parse(event.target?.result as string);
+        if (!parsed || typeof parsed !== 'object') {
+          throw new Error('Invalid JSON structure');
+        }
         onImportAllData(parsed);
+        setImportError(null);
         setImportSuccess(true);
         setTimeout(() => setImportSuccess(false), 3000);
       } catch (err) {
-        alert('Invalid JSON backup file.');
+        console.error('Invalid JSON backup file:', err);
+        setImportError(
+          lang === 'ug'
+            ? 'ئىناۋەتسىز JSON زاپاس ھۆججىتى. توغرا فورماتتىكى ھۆججەتنى تاللاڭ.'
+            : 'Invalid JSON backup file. Please select a valid backup export.'
+        );
+        setTimeout(() => setImportError(null), 4000);
       }
     };
     reader.readAsText(file);
@@ -224,19 +236,45 @@ export const SettingsSyncView: React.FC<SettingsSyncViewProps> = ({
             className="hidden"
           />
 
-          <button
-            onClick={onResetDefaults}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition-colors"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>{t.resetSampleData}</span>
-          </button>
+          {confirmReset ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setConfirmReset(false);
+                  onResetDefaults();
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 text-white hover:bg-red-700 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <span>{lang === 'ug' ? 'جەزملەشتۈرۈش (Reset)' : 'Confirm Reset'}</span>
+              </button>
+              <button
+                onClick={() => setConfirmReset(false)}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                <span>{lang === 'ug' ? 'بىكار قىلىش' : 'Cancel'}</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>{t.resetSampleData}</span>
+            </button>
+          )}
         </div>
 
         {importSuccess && (
           <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-700 dark:text-emerald-300 font-semibold flex items-center gap-2 animate-in fade-in">
             <CheckCircle2 className="w-4 h-4" />
-            <span>All data successfully imported and synced!</span>
+            <span>{lang === 'ug' ? 'بارلىق سانلىق مەلۇماتلار مۇۋەپپەقىيەتلىك ئەسلىگە كەلتۈرۈلدى!' : 'All data successfully imported and synced!'}</span>
+          </div>
+        )}
+
+        {importError && (
+          <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-700 dark:text-red-300 font-semibold flex items-center gap-2 animate-in fade-in">
+            <span>{importError}</span>
           </div>
         )}
       </div>

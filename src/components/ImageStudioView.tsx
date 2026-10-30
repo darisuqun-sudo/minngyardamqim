@@ -594,12 +594,10 @@ export const ImageStudioView: React.FC<ImageStudioViewProps> = ({ lang, onSaveTo
             {history.length > 0 && (
               <button
                 onClick={() => {
-                  if (confirm(lang === 'ug' ? 'بارلىق رەسىم تارىخىنى تازىلامسىز؟' : 'Clear all image history?')) {
-                    saveHistory([]);
-                    setCurrentImage(null);
-                  }
+                  saveHistory([]);
+                  setCurrentImage(null);
                 }}
-                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-bold"
+                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1 font-bold cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>{lang === 'ug' ? 'ئامبارنى تازىلاش' : 'Clear Gallery'}</span>

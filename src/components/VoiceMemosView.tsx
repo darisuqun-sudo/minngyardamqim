@@ -56,6 +56,7 @@ export const VoiceMemosView: React.FC<VoiceMemosViewProps> = ({
     voiceMemos.length > 0 ? voiceMemos[0] : null
   );
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedNoteMemoId, setSavedNoteMemoId] = useState<string | null>(null);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [addedTaskId, setAddedTaskId] = useState<string | null>(null);
   const [manualNoteInput, setManualNoteInput] = useState('');
@@ -280,7 +281,8 @@ export const VoiceMemosView: React.FC<VoiceMemosViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
     onAddNote(newNote);
-    alert(language === 'ug' ? 'خاتىرىگە مۇۋەپپەقىيەتلىك قوشۇلدى!' : 'Saved to Knowledge Notes!');
+    setSavedNoteMemoId(selectedMemo.id);
+    setTimeout(() => setSavedNoteMemoId(null), 2500);
   };
 
   const formatTime = (secs: number) => {
@@ -562,16 +564,22 @@ export const VoiceMemosView: React.FC<VoiceMemosViewProps> = ({
                     className="p-2 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
                     title="Save to Knowledge Notes"
                   >
-                    <FileText className="w-4 h-4 text-indigo-500" />
-                    <span className="hidden sm:inline">{language === 'ug' ? 'خاتىرىگە قوشۇش' : 'Save Note'}</span>
+                    {savedNoteMemoId === selectedMemo.id ? (
+                      <Check className="w-4 h-4 text-emerald-500" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-indigo-500" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {savedNoteMemoId === selectedMemo.id
+                        ? (language === 'ug' ? 'ساقلاندى!' : 'Saved!')
+                        : (language === 'ug' ? 'خاتىرىگە قوشۇش' : 'Save Note')}
+                    </span>
                   </button>
                   <button
                     id="delete-memo-btn"
                     onClick={() => {
-                      if (confirm(language === 'ug' ? 'بۇ خاتىرىنى ئۆچۈرەمسىز؟' : 'Delete this voice memo?')) {
-                        onDeleteVoiceMemo(selectedMemo.id);
-                        setSelectedMemo(null);
-                      }
+                      onDeleteVoiceMemo(selectedMemo.id);
+                      setSelectedMemo(null);
                     }}
                     className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer transition-colors"
                     title="Delete"

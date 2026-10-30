@@ -49,6 +49,7 @@ export const WebReaderView: React.FC<WebReaderViewProps> = ({
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedVaultId, setSavedVaultId] = useState<string | null>(null);
   const [addedTaskId, setAddedTaskId] = useState<string | null>(null);
   const [activeLangTab, setActiveLangTab] = useState<'ug' | 'en' | 'tr' | 'ar'>('ug');
 
@@ -136,7 +137,8 @@ export const WebReaderView: React.FC<WebReaderViewProps> = ({
       sizeKb: 2.4,
     };
     onAddKnowledgeDoc(newDoc);
-    alert(language === 'ug' ? 'بىلىم ئامبىرىغا مۇۋەپپەقىيەتلىك ساقلاندى!' : 'Saved to Knowledge Vault!');
+    setSavedVaultId(article.id);
+    setTimeout(() => setSavedVaultId(null), 2500);
   };
 
   const handlePushTask = (item: string, idx: number) => {
@@ -356,15 +358,17 @@ export const WebReaderView: React.FC<WebReaderViewProps> = ({
                     className="p-2 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                     title="Save to Knowledge Vault"
                   >
-                    <Bookmark className="w-4 h-4" />
-                    <span className="hidden sm:inline">{language === 'ug' ? 'بىلىم ئامبىرىغا ساقلاش' : 'Save to Vault'}</span>
+                    {savedVaultId === selectedArticle.id ? <Check className="w-4 h-4 text-emerald-500" /> : <Bookmark className="w-4 h-4" />}
+                    <span className="hidden sm:inline">
+                      {savedVaultId === selectedArticle.id
+                        ? (language === 'ug' ? 'ساقلاندى!' : 'Saved!')
+                        : (language === 'ug' ? 'بىلىم ئامبىرىغا ساقلاش' : 'Save to Vault')}
+                    </span>
                   </button>
                   <button
                     onClick={() => {
-                      if (confirm(language === 'ug' ? 'بۇ ماقالە خاتىرىسىنى ئۆچۈرەمسىز؟' : 'Delete article record?')) {
-                        onDeleteArticle(selectedArticle.id);
-                        setSelectedArticle(null);
-                      }
+                      onDeleteArticle(selectedArticle.id);
+                      setSelectedArticle(null);
                     }}
                     className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg cursor-pointer transition-colors"
                   >

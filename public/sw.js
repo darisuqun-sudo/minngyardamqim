@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'minngyardamqim-v1';
+const CACHE_NAME = 'minngyardamqim-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -32,6 +32,10 @@ self.addEventListener('activate', (event) => {
 
 // Fetch Event
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   const url = new URL(event.request.url);
 
   // Do not cache API endpoints - always live network

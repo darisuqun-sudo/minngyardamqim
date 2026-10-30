@@ -1232,22 +1232,23 @@ export default function App() {
   };
 
   const handleImportAllData = (backup: any) => {
-    if (backup.tasks) setTasks(backup.tasks);
-    if (backup.notes) setNotes(backup.notes);
-    if (backup.events) setEvents(backup.events);
-    if (backup.docs) setDocs(backup.docs);
-    if (backup.blueprints) setBlueprints(backup.blueprints);
-    if (backup.habits) setHabits(backup.habits);
-    if (backup.transactions) setTransactions(backup.transactions);
-    if (backup.budgetGoals) setBudgetGoals(backup.budgetGoals);
-    if (backup.roadmapPhases) setRoadmapPhases(backup.roadmapPhases);
-    if (backup.flashcardDecks) setFlashcardDecks(backup.flashcardDecks);
-    if (backup.mindMaps) setMindMaps(backup.mindMaps);
-    if (backup.promptTemplates) setPromptTemplates(backup.promptTemplates);
-    if (backup.standupHistory) setStandupHistory(backup.standupHistory);
-    if (backup.voiceMemos) setVoiceMemos(backup.voiceMemos);
-    if (backup.okrGoals) setOkrGoals(backup.okrGoals);
-    if (backup.webArticles) setWebArticles(backup.webArticles);
+    if (!backup || typeof backup !== 'object') return;
+    if (Array.isArray(backup.tasks)) setTasks(backup.tasks);
+    if (Array.isArray(backup.notes)) setNotes(backup.notes);
+    if (Array.isArray(backup.events)) setEvents(backup.events);
+    if (Array.isArray(backup.docs)) setDocs(backup.docs);
+    if (Array.isArray(backup.blueprints)) setBlueprints(backup.blueprints);
+    if (Array.isArray(backup.habits)) setHabits(backup.habits);
+    if (Array.isArray(backup.transactions)) setTransactions(backup.transactions);
+    if (Array.isArray(backup.budgetGoals)) setBudgetGoals(backup.budgetGoals);
+    if (Array.isArray(backup.roadmapPhases)) setRoadmapPhases(backup.roadmapPhases);
+    if (Array.isArray(backup.flashcardDecks)) setFlashcardDecks(backup.flashcardDecks);
+    if (Array.isArray(backup.mindMaps)) setMindMaps(backup.mindMaps);
+    if (Array.isArray(backup.promptTemplates)) setPromptTemplates(backup.promptTemplates);
+    if (Array.isArray(backup.standupHistory)) setStandupHistory(backup.standupHistory);
+    if (Array.isArray(backup.voiceMemos)) setVoiceMemos(backup.voiceMemos);
+    if (Array.isArray(backup.okrGoals)) setOkrGoals(backup.okrGoals);
+    if (Array.isArray(backup.webArticles)) setWebArticles(backup.webArticles);
     if (backup.chatSessions && Array.isArray(backup.chatSessions) && backup.chatSessions.length > 0) {
       setChatSessions(backup.chatSessions);
       setActiveSessionId(backup.chatSessions[0].id);
@@ -1255,27 +1256,25 @@ export default function App() {
   };
 
   const handleResetDefaults = () => {
-    if (window.confirm('Reset all data back to original defaults?')) {
-      setTasks(INITIAL_TASKS);
-      setNotes(INITIAL_NOTES);
-      setEvents(INITIAL_CALENDAR_EVENTS);
-      setDocs(INITIAL_KNOWLEDGE_DOCS);
-      setBlueprints(INITIAL_PROJECT_BLUEPRINTS);
-      setHabits(INITIAL_HABITS);
-      setTransactions(INITIAL_TRANSACTIONS);
-      setBudgetGoals(INITIAL_BUDGET_GOALS);
-      setRoadmapPhases(ROADMAP_PHASES);
-      setFlashcardDecks(INITIAL_FLASHCARD_DECKS);
-      setMindMaps(INITIAL_MIND_MAPS);
-      setPromptTemplates(INITIAL_PROMPT_TEMPLATES);
-      setStandupHistory(INITIAL_STANDUP_RECORDS);
-      setVoiceMemos(INITIAL_VOICE_MEMOS);
-      setOkrGoals(INITIAL_OKR_GOALS);
-      setWebArticles(INITIAL_WEB_ARTICLES);
-      setMorningBriefing(INITIAL_MORNING_BRIEFING);
+    setTasks(INITIAL_TASKS);
+    setNotes(INITIAL_NOTES);
+    setEvents(INITIAL_CALENDAR_EVENTS);
+    setDocs(INITIAL_KNOWLEDGE_DOCS);
+    setBlueprints(INITIAL_PROJECT_BLUEPRINTS);
+    setHabits(INITIAL_HABITS);
+    setTransactions(INITIAL_TRANSACTIONS);
+    setBudgetGoals(INITIAL_BUDGET_GOALS);
+    setRoadmapPhases(ROADMAP_PHASES);
+    setFlashcardDecks(INITIAL_FLASHCARD_DECKS);
+    setMindMaps(INITIAL_MIND_MAPS);
+    setPromptTemplates(INITIAL_PROMPT_TEMPLATES);
+    setStandupHistory(INITIAL_STANDUP_RECORDS);
+    setVoiceMemos(INITIAL_VOICE_MEMOS);
+    setOkrGoals(INITIAL_OKR_GOALS);
+    setWebArticles(INITIAL_WEB_ARTICLES);
+    setMorningBriefing(INITIAL_MORNING_BRIEFING);
 
-      localStorage.clear();
-    }
+    localStorage.clear();
   };
 
   return (

@@ -1727,7 +1727,11 @@ export const AssistantChatView: React.FC<AssistantChatViewProps> = ({
                               key={att.id}
                               onClick={() => {
                                 if (att.driveUrl) {
-                                  window.open(att.driveUrl, '_blank', 'noopener,noreferrer');
+                                  const link = document.createElement('a');
+                                  link.href = att.driveUrl;
+                                  link.target = '_blank';
+                                  link.rel = 'noopener noreferrer';
+                                  link.click();
                                 }
                               }}
                               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs transition-all ${
